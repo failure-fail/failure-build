@@ -5,10 +5,9 @@ on:
     branches:
       - claude/grok-rebrand-reskin-0jgqqy
     paths:
-      - "crates/codegen/xai-grok-pager/npm/failure/bin/failure"
-      - "crates/codegen/xai-grok-pager/npm/failure/bin/mcp-server.js"
-      - "crates/codegen/xai-grok-pager/npm/failure/scripts/test-mcp-server.js"
-      - "crates/codegen/xai-grok-pager/npm/failure/package.json"
+      - "crates/codegen/xai-grok-pager/npm/failure/**"
+      - "crates/codegen/xai-grok-pager-bin/**"
+      - "crates/codegen/xai-grok-pager/src/app/cli.rs"
       - ".github/workflows/failure-mcp-smoke.yml"
   workflow_dispatch:
 
@@ -36,3 +35,16 @@ jobs:
         run: node --check bin/mcp-server.js
       - name: Run MCP protocol smoke test
         run: node scripts/test-mcp-server.js
+      - name: Verify npm package contents
+        run: npm pack --dry-run
+
+  native-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Install DotSlash
+        run: cargo install dotslash --locked
+      - name: Check native Failure app
+        run: cargo check -p xai-grok-pager-bin
