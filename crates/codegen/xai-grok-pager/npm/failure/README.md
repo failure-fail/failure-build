@@ -59,9 +59,9 @@ and records a temporary public URL.
 
 ### Stable Cloudflare Worker URL
 
-Users can provide a Cloudflare API token and account ID once, then access
-Failure through a stable `workers.dev` URL instead of copying a new Quick
-Tunnel URL every launch.
+Users can provide a Cloudflare API token once, then access Failure through a
+stable `workers.dev` URL instead of copying a new Quick Tunnel URL every
+launch.
 
 Configure it interactively:
 
@@ -72,8 +72,11 @@ failure mcp-worker configure
 Failure asks for:
 
 - a Cloudflare API token with **Workers Scripts Write** permission
-- the Cloudflare account ID
+- an account selection only when the token can access multiple accounts
 - a Worker name, defaulting to `failure-mcp`
+
+For a token scoped to one account, Failure discovers the account ID
+automatically.
 
 The credentials are stored locally with owner-only permissions at:
 
@@ -143,7 +146,10 @@ FAILURE_MCP_PORT=9000 failure
 # Use a fixed MCP access token
 FAILURE_MCP_TOKEN="your-secret" failure
 
-# Supply Cloudflare configuration non-interactively
+# Supply the Cloudflare token non-interactively
+CLOUDFLARE_API_TOKEN="..." failure mcp-worker configure
+
+# Optionally force a particular account when the token covers several
 CLOUDFLARE_API_TOKEN="..." CLOUDFLARE_ACCOUNT_ID="..." failure mcp-worker configure
 
 # Override the cloudflared executable
