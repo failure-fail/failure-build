@@ -2,12 +2,21 @@
 'use strict';
 
 const assert = require('assert');
-const { deployProxyWorker } = require('../bin/cloudflare-worker');
+const { discoverAccounts, deployProxyWorker } = require('../bin/cloudflare-worker');
 
 const calls = [];
 
 global.fetch = async (url, options = {}) => {
   calls.push({ url, options });
+  if (url.includes('/accounts?')) {
+    return new Response(JSON.stringify({
+      success: true,
+      result: [{ id: 'account-123', name: 'Failure Test Account' }],
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
   if (url.endsWith('/workers/subdomain')) {
     return new Response(JSON.stringify({ success: true, result: { subdomain: 'failure-test' } }), {
       status: 200,
@@ -21,6 +30,10 @@ global.fetch = async (url, options = {}) => {
 };
 
 async function main() {
+  const accounts = await discoverAccounts('test-token');
+  assert.deepStrictEqual(accounts, [{ id: 'account-123', name: 'Failure Test Account' }]);
+  assert.strictEqual(calls[0].options.headers.authorization, 'Bearer test-token');
+
   const config = {
     apiToken: 'test-token',
     accountId: 'account-123',
@@ -33,9 +46,9 @@ async function main() {
   );
 
   assert.strictEqual(url, 'https://failure-mcp-test.failure-test.workers.dev/mcp?token=access-secret');
-  assert.strictEqual(calls.length, 3);
+  assert.strictEqual(calls.length, 4);
 
-  const upload = calls[0];
+  const upload = calls[1];
   assert.match(upload.url, /accounts\/account-123\/workers\/scripts\/failure-mcp-test$/);
   assert.strictEqual(upload.options.method, 'PUT');
   assert.strictEqual(upload.options.headers.authorization, 'Bearer test-token');
@@ -52,7 +65,7 @@ async function main() {
   assert.match(source, /env\.ACCESS_TOKEN/);
   assert.match(source, /authorization/);
 
-  const enable = calls[1];
+  const enable = calls[2];
   assert.match(enable.url, /failure-mcp-test\/subdomain$/);
   assert.strictEqual(enable.options.method, 'POST');
   assert.deepStrictEqual(JSON.parse(enable.options.body), { enabled: true, previews_enabled: false });
