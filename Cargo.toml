@@ -102,7 +102,16 @@ arboard = "3.6"
 arc-swap = "1.7"
 assert_matches = "1.5.0"
 async-compression = { version = "0.4.17", default-features = false, features = ["gzip", "zstd", "tokio"] }
-async-lsp = { version = "0.2.3", features = ["tokio", "tracing"] }
+# default-features off to drop `client-monitor`: it pulls in waitpid-any (a
+# transitive `pidfd_open`-based dependency that doesn't compile for
+# target_os = "android", a distinct target_os from "linux" in rustix despite
+# sharing the kernel). client-monitor is middleware for LSP *servers* to watch
+# their client's liveness (see async-lsp's client_monitor.rs doc comment,
+# "Only applies to Language Servers") — this crate only ever acts as an LSP
+# *client* spawning language servers as children, so it's dead weight we never
+# used. `omni-trait` is added explicitly since it's on by default upstream and
+# this crate's LSP client code uses `async_lsp::LanguageServer` from it.
+async-lsp = { version = "0.2.3", default-features = false, features = ["tokio", "tracing", "omni-trait"] }
 async-openai = { version = "0.33.0", features = ["responses"] }
 async-stream = "0.3"
 async-trait = "0.1"
