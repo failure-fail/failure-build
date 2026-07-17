@@ -1278,6 +1278,11 @@ pub struct Config {
     /// `[model.*]` overrides from config.toml. Resolve via `resolve_model_list()`.
     #[serde(skip)]
     pub config_models: IndexMap<String, ConfigModelOverride>,
+    /// `[provider.*]` named connection profiles from config.toml, layered
+    /// over the built-in xai/openai/anthropic/ollama presets. See
+    /// [`ProviderConfig`] and [`ConfigModelOverride::provider`].
+    #[serde(skip)]
+    pub config_providers: IndexMap<String, ProviderConfig>,
     /// Warnings from `[model.*]` parsing; surfaced by `grok inspect`.
     #[serde(skip)]
     pub model_override_warnings: Vec<super::config_model_override_parse::ModelOverrideWarning>,
@@ -1706,6 +1711,7 @@ impl Default for Config {
             doom_loop_recovery: crate::util::config::DoomLoopRecoverySettings::default(),
             auto_mode: AutoModeConfig::default(),
             config_models: IndexMap::new(),
+            config_providers: default_provider_entries(),
             model_override_warnings: Vec::new(),
             grok_com_config: GrokComConfig::default(),
             shortcuts: None,
@@ -1848,13 +1854,26 @@ impl Config {
             warnings: model_override_warnings,
         } = super::config_model_override_parse::parse_model_overrides(raw_config);
         super::config_model_override_parse::log_model_override_warnings(&model_override_warnings);
+        let super::config_model_override_parse::ParsedProviderOverrides {
+            providers: user_providers,
+            warnings: provider_override_warnings,
+        } = super::config_model_override_parse::parse_provider_overrides(raw_config);
+        super::config_model_override_parse::log_model_override_warnings(
+            &provider_override_warnings,
+        );
+        let mut config_providers = default_provider_entries();
+        for (name, provider) in user_providers {
+            config_providers.insert(name, provider);
+        }
         let mut base = toml::Value::try_from(Self::default()).map_err(|e| e.to_string())?;
         if let toml::Value::Table(ref mut t) = base {
             t.remove("model");
+            t.remove("provider");
         }
         let mut raw_without_model_sections = raw_config.clone();
         if let toml::Value::Table(ref mut t) = raw_without_model_sections {
             t.remove("model");
+            t.remove("provider");
         }
         crate::config::deep_merge_toml(&mut base, &raw_without_model_sections);
         let (mut config, user_unused) =
@@ -1866,6 +1885,7 @@ impl Config {
             );
         }
         config.config_models = config_models;
+        config.config_providers = config_providers;
         config.model_override_warnings = model_override_warnings;
         if config.grok_com_config.oidc.is_none() {
             config.grok_com_config.oidc = OidcAuthConfig::from_env();
@@ -3191,7 +3211,7 @@ pub fn resolve_model_list(
                 );
             }
         }
-        let entry = model_override.apply(key, base, &cfg.endpoints);
+        let entry = model_override.apply(key, base, &cfg.endpoints, &cfg.config_providers);
         tracing::debug!(
             model_key = % key, base_url = % entry.info.base_url, has_api_key = entry
             .api_key.is_some(), env_key = ? entry.env_key, had_base,
@@ -3561,6 +3581,73 @@ pub struct ModelEntryConfig {
 fn is_default_laziness_detector(cfg: &LazinessDetectorPerModelConfig) -> bool {
     cfg == &LazinessDetectorPerModelConfig::default()
 }
+/// A named `[provider.<name>]` profile: reusable connection defaults that a
+/// `[model.<id>]` entry opts into via `provider = "<name>"`. Folded in as
+/// defaults before the model's own override fields in
+/// [`ConfigModelOverride::apply`], so a model can still override any single
+/// field (e.g. a custom `context_window`) while inheriting the rest.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProviderConfig {
+    pub name: Option<String>,
+    pub base_url: Option<String>,
+    pub api_base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub env_key: Option<EnvKeys>,
+    pub api_backend: Option<ApiBackend>,
+    pub auth_scheme: Option<AuthScheme>,
+    #[serde(default)]
+    pub extra_headers: IndexMap<String, String>,
+    pub context_window: Option<u64>,
+}
+/// Built-in `[provider.*]` presets: xai (base URL resolved dynamically via
+/// [`EndpointsConfig`], not duplicated here), openai, anthropic, ollama.
+/// User `[provider.*]` tables in config.toml override these by name.
+pub fn default_provider_entries() -> IndexMap<String, ProviderConfig> {
+    let mut providers = IndexMap::new();
+    providers.insert(
+        "xai".to_string(),
+        ProviderConfig {
+            name: Some("xAI".to_string()),
+            ..Default::default()
+        },
+    );
+    providers.insert(
+        "openai".to_string(),
+        ProviderConfig {
+            name: Some("OpenAI".to_string()),
+            base_url: Some("https://api.openai.com/v1".to_string()),
+            api_backend: Some(ApiBackend::ChatCompletions),
+            auth_scheme: Some(AuthScheme::Bearer),
+            ..Default::default()
+        },
+    );
+    providers.insert(
+        "anthropic".to_string(),
+        ProviderConfig {
+            name: Some("Anthropic".to_string()),
+            base_url: Some("https://api.anthropic.com/v1".to_string()),
+            api_backend: Some(ApiBackend::Messages),
+            auth_scheme: Some(AuthScheme::XApiKey),
+            extra_headers: {
+                let mut headers = IndexMap::new();
+                headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
+                headers
+            },
+            ..Default::default()
+        },
+    );
+    providers.insert(
+        "ollama".to_string(),
+        ProviderConfig {
+            name: Some("Ollama".to_string()),
+            base_url: Some("http://localhost:11434/v1".to_string()),
+            api_backend: Some(ApiBackend::ChatCompletions),
+            ..Default::default()
+        },
+    );
+    providers
+}
 /// A `[model.foo]` entry from config.toml, parsed directly from raw TOML
 /// (bypassing deep merge). Scalar fields are `Option` so absent means "inherit
 /// from defaults/prefetched"; the collection fields (`extra_headers`,
@@ -3584,6 +3671,13 @@ pub struct ConfigModelOverride {
     #[serde(default)]
     pub extra_headers: IndexMap<String, String>,
     pub context_window: Option<u64>,
+    /// Named `[provider.*]` profile this model inherits connection defaults
+    /// from (see [`ProviderConfig`]). Folded in before this struct's own
+    /// fields in `apply`, so model-level fields still win.
+    pub provider: Option<String>,
+    /// Auth scheme override (e.g. `x_api_key` for Anthropic-shaped APIs).
+    /// Also settable via a named `provider`; this field wins when both set.
+    pub auth_scheme: Option<AuthScheme>,
     /// Per-model auto-compact threshold override (0-100) from `[model.<id>]`.
     /// Read directly by `resolve_auto_compact_threshold_percent`; intentionally
     /// NOT merged into `ModelInfo.auto_compact_threshold_percent` so the
@@ -3615,8 +3709,43 @@ impl ConfigModelOverride {
         key: &str,
         base: Option<ModelEntry>,
         endpoints: &EndpointsConfig,
+        providers: &IndexMap<String, ProviderConfig>,
     ) -> ModelEntry {
         let mut entry = base.unwrap_or_else(|| ModelEntry::fallback(key, endpoints));
+        if let Some(provider_name) = &self.provider {
+            entry.info.provider = Some(provider_name.clone());
+            if let Some(p) = providers.get(provider_name) {
+                if let Some(ref v) = p.base_url {
+                    entry.info.base_url = v.clone();
+                }
+                if p.api_key.is_some() {
+                    entry.api_key.clone_from(&p.api_key);
+                }
+                if p.env_key.is_some() {
+                    entry.env_key.clone_from(&p.env_key);
+                }
+                if p.api_base_url.is_some() {
+                    entry.api_base_url.clone_from(&p.api_base_url);
+                }
+                if let Some(ref v) = p.api_backend {
+                    entry.info.api_backend = v.clone();
+                }
+                if let Some(v) = p.auth_scheme {
+                    entry.info.auth_scheme = v;
+                }
+                if !p.extra_headers.is_empty() {
+                    entry.info.extra_headers = p.extra_headers.clone();
+                }
+                if let Some(cw) = p.context_window.and_then(NonZeroU64::new) {
+                    entry.info.context_window = cw;
+                }
+            } else {
+                tracing::warn!(
+                    model = %key, provider = %provider_name,
+                    "model references unknown provider — model-level fields still apply",
+                );
+            }
+        }
         if let Some(ref v) = self.model {
             entry.info.model = v.clone();
         }
@@ -3643,6 +3772,9 @@ impl ConfigModelOverride {
         }
         if let Some(ref v) = self.api_backend {
             entry.info.api_backend = v.clone();
+        }
+        if let Some(v) = self.auth_scheme {
+            entry.info.auth_scheme = v;
         }
         if !self.extra_headers.is_empty() {
             entry.info.extra_headers = self.extra_headers.clone();
@@ -3732,6 +3864,12 @@ pub struct ModelInfo {
     pub top_p: Option<f32>,
     pub api_backend: ApiBackend,
     pub auth_scheme: AuthScheme,
+    /// Named `[provider.*]` profile this model resolved from, if any (see
+    /// [`ProviderConfig`]). Drives blessed-global-env-var and stored-secret
+    /// credential fallback tiers in `resolve_credentials`; `None`/`"xai"`
+    /// keeps today's xAI-only fallback behavior unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
     pub extra_headers: IndexMap<String, String>,
     pub context_window: NonZeroU64,
     /// Per-model auto-compact threshold (0-100). `None` defers to the
@@ -3797,6 +3935,7 @@ impl ModelInfo {
             top_p: None,
             api_backend: ApiBackend::default(),
             auth_scheme: Default::default(),
+            provider: None,
             extra_headers: IndexMap::new(),
             context_window: NonZeroU64::new(200_000).unwrap(),
             auto_compact_threshold_percent: None,
@@ -3832,6 +3971,7 @@ impl ModelInfo {
             top_p: entry.top_p,
             api_backend: entry.api_backend.clone(),
             auth_scheme: entry.auth_scheme.unwrap_or_default(),
+            provider: None,
             extra_headers: entry.extra_headers.clone(),
             context_window: entry.context_window,
             auto_compact_threshold_percent: entry.auto_compact_threshold_percent,
@@ -3924,10 +4064,28 @@ impl ModelEntry {
         first_own_credential(self.api_key.as_deref(), self.env_key.as_ref())
     }
     /// `true` when the model has a non-empty `api_key` or an `env_key` that
-    /// resolves to a non-empty value.
+    /// resolves to a non-empty value, a stored provider-scoped secret, or a
+    /// blessed `FAILURE_<PROVIDER>_API_KEY` global env var (non-xAI
+    /// providers only).
     /// Probes `std::env::var` at call time — result is not stable across env changes.
     pub fn has_own_credentials(&self) -> bool {
-        self.own_credential().is_some()
+        if self.own_credential().is_some() {
+            return true;
+        }
+        let Some(provider) = self
+            .info
+            .provider
+            .as_deref()
+            .filter(|p| *p != "xai" && !p.is_empty())
+        else {
+            return false;
+        };
+        crate::auth::read_provider_api_key(
+            &crate::util::grok_home::grok_home(),
+            &crate::auth::provider_api_key_scope(provider),
+        )
+        .is_some()
+            || crate::agent::auth_method::read_provider_api_key_env(provider).is_ok()
     }
 }
 impl std::ops::Deref for ModelEntry {
@@ -4305,18 +4463,33 @@ pub(crate) fn first_own_credential(
 /// When `env_key` lists multiple names, the first set non-empty value is used.
 pub fn resolve_credentials(model: &ModelEntry, session_key: Option<&str>) -> ResolvedCredentials {
     let info = model.info();
+    let byop_provider = info
+        .provider
+        .as_deref()
+        .filter(|p| *p != "xai" && !p.is_empty());
     let (api_key, base_url, auth_type) = if let Some(key) = model.own_credential() {
         (
             Some(key),
             info.base_url.clone(),
             xai_chat_state::AuthType::ApiKey,
         )
+    } else if let Some(key) = byop_provider.and_then(|provider| {
+        crate::auth::read_provider_api_key(
+            &crate::util::grok_home::grok_home(),
+            &crate::auth::provider_api_key_scope(provider),
+        )
+    }) {
+        (Some(key), info.base_url.clone(), xai_chat_state::AuthType::ApiKey)
     } else if let Some(key) = session_key {
         (
             Some(key.to_owned()),
             info.base_url.clone(),
             xai_chat_state::AuthType::SessionToken,
         )
+    } else if let Some(key) = byop_provider
+        .and_then(|provider| crate::agent::auth_method::read_provider_api_key_env(provider).ok())
+    {
+        (Some(key), info.base_url.clone(), xai_chat_state::AuthType::ApiKey)
     } else if let Ok(key) = crate::agent::auth_method::read_xai_api_key_env() {
         let url = model
             .api_base_url
@@ -4516,6 +4689,7 @@ pub fn resolve_aux_model_sampling_config(
                 top_p: None,
                 api_backend: ApiBackend::Responses,
                 auth_scheme: Default::default(),
+                provider: None,
                 extra_headers: IndexMap::new(),
                 context_window: NonZeroU64::new(200_000).unwrap(),
                 auto_compact_threshold_percent: None,
@@ -4738,6 +4912,7 @@ fn resolve_hidden_default_web_search_sampling_config(
             top_p: None,
             api_backend: ApiBackend::Responses,
             auth_scheme: Default::default(),
+            provider: None,
             extra_headers: IndexMap::new(),
             context_window: NonZeroU64::new(200_000).unwrap(),
             auto_compact_threshold_percent: None,
@@ -5394,6 +5569,7 @@ reasoning_effort = "low"
                 top_p: None,
                 api_backend: ApiBackend::default(),
                 auth_scheme: Default::default(),
+                provider: None,
                 extra_headers: IndexMap::new(),
                 context_window: NonZeroU64::new(200_000).unwrap(),
                 auto_compact_threshold_percent: None,
@@ -5981,7 +6157,8 @@ reasoning_effort = "low"
             show_model_fingerprint: Some(true),
             ..Default::default()
         };
-        let entry = override_on.apply("some-model", None, &endpoints);
+        let providers = default_provider_entries();
+        let entry = override_on.apply("some-model", None, &endpoints, &providers);
         assert!(
             entry.info.show_model_fingerprint,
             "Some(true) override should enable show_model_fingerprint"
@@ -5989,7 +6166,7 @@ reasoning_effort = "low"
         let mut base = ModelEntry::fallback("some-model", &endpoints);
         base.info.show_model_fingerprint = true;
         let override_absent = ConfigModelOverride::default();
-        let entry = override_absent.apply("some-model", Some(base), &endpoints);
+        let entry = override_absent.apply("some-model", Some(base), &endpoints, &providers);
         assert!(
             entry.info.show_model_fingerprint,
             "None override should preserve the base entry's show_model_fingerprint"
@@ -6000,10 +6177,140 @@ reasoning_effort = "low"
             show_model_fingerprint: Some(false),
             ..Default::default()
         };
-        let entry = override_off.apply("some-model", Some(base), &endpoints);
+        let entry = override_off.apply("some-model", Some(base), &endpoints, &providers);
         assert!(
             !entry.info.show_model_fingerprint,
             "Some(false) override should disable show_model_fingerprint over a true base"
+        );
+    }
+    #[test]
+    fn byop_model_inherits_fields_from_named_openai_provider() {
+        let raw_config: toml::Value = toml::from_str(
+            r#"
+            [model."my-openai"]
+            model = "gpt-4o"
+            provider = "openai"
+            "#,
+        )
+        .unwrap();
+        let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+        let model = resolve_model_list(&cfg, None)
+            .get("my-openai")
+            .expect("model should exist")
+            .clone();
+        assert_eq!(model.info.base_url, "https://api.openai.com/v1");
+        assert_eq!(model.info.api_backend, ApiBackend::ChatCompletions);
+        assert_eq!(model.info.auth_scheme, AuthScheme::Bearer);
+        assert_eq!(model.info.provider.as_deref(), Some("openai"));
+    }
+    #[test]
+    fn byop_model_inherits_fields_from_named_anthropic_provider() {
+        let raw_config: toml::Value = toml::from_str(
+            r#"
+            [model."my-claude"]
+            model = "claude-opus"
+            provider = "anthropic"
+            "#,
+        )
+        .unwrap();
+        let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+        let model = resolve_model_list(&cfg, None)
+            .get("my-claude")
+            .expect("model should exist")
+            .clone();
+        assert_eq!(model.info.base_url, "https://api.anthropic.com/v1");
+        assert_eq!(model.info.api_backend, ApiBackend::Messages);
+        assert_eq!(model.info.auth_scheme, AuthScheme::XApiKey);
+        assert_eq!(
+            model.info.extra_headers.get("anthropic-version").map(String::as_str),
+            Some("2023-06-01")
+        );
+    }
+    #[test]
+    fn byop_model_level_fields_override_provider_defaults() {
+        let raw_config: toml::Value = toml::from_str(
+            r#"
+            [model."custom-openai"]
+            model = "gpt-4o-mini"
+            provider = "openai"
+            base_url = "https://my-proxy.example.com/v1"
+            "#,
+        )
+        .unwrap();
+        let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+        let model = resolve_model_list(&cfg, None)
+            .get("custom-openai")
+            .expect("model should exist")
+            .clone();
+        assert_eq!(
+            model.info.base_url, "https://my-proxy.example.com/v1",
+            "model-level base_url must win over the provider preset"
+        );
+        assert_eq!(
+            model.info.api_backend,
+            ApiBackend::ChatCompletions,
+            "unset model-level fields still inherit from the provider"
+        );
+    }
+    #[test]
+    fn byop_unknown_provider_name_does_not_drop_the_model() {
+        let raw_config: toml::Value = toml::from_str(
+            r#"
+            [model."mystery"]
+            model = "some-model"
+            provider = "not-a-real-provider"
+            "#,
+        )
+        .unwrap();
+        let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+        let model = resolve_model_list(&cfg, None)
+            .get("mystery")
+            .expect("model must remain in the catalog even with an unknown provider");
+        assert_eq!(model.info.model, "some-model");
+    }
+    #[test]
+    fn byop_user_provider_overrides_built_in_preset() {
+        let raw_config: toml::Value = toml::from_str(
+            r#"
+            [provider.openai]
+            base_url = "https://openai.internal.example.com/v1"
+
+            [model."my-openai"]
+            model = "gpt-4o"
+            provider = "openai"
+            "#,
+        )
+        .unwrap();
+        let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+        let model = resolve_model_list(&cfg, None)
+            .get("my-openai")
+            .expect("model should exist")
+            .clone();
+        assert_eq!(
+            model.info.base_url, "https://openai.internal.example.com/v1",
+            "a user [provider.openai] table must override the built-in preset"
+        );
+    }
+    #[test]
+    fn byop_model_auth_scheme_settable_directly_on_model_override() {
+        let raw_config: toml::Value = toml::from_str(
+            r#"
+            [model."custom"]
+            model = "some-model"
+            base_url = "https://example.com/v1"
+            auth_scheme = "x_api_key"
+            "#,
+        )
+        .unwrap();
+        let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+        let model = resolve_model_list(&cfg, None)
+            .get("custom")
+            .expect("model should exist")
+            .clone();
+        assert_eq!(
+            model.info.auth_scheme,
+            AuthScheme::XApiKey,
+            "auth_scheme must be settable directly on a [model.*] entry without a named provider"
         );
     }
     #[test]
@@ -10589,6 +10896,7 @@ default = "grok-4.5"
                 top_p: None,
                 api_backend,
                 auth_scheme: Default::default(),
+                provider: None,
                 extra_headers: IndexMap::new(),
                 context_window: NonZeroU64::new(context_window).unwrap(),
                 use_concise: false,

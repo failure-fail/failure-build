@@ -41,6 +41,13 @@ pub enum Command {
         /// `devbox-login` is enabled (`arg(skip)` otherwise → always false).
         #[arg(skip)]
         devbox: bool,
+        /// Named BYOP provider to store a key for (e.g. "openai", "anthropic"),
+        /// bypassing OAuth entirely. Requires `--api-key`.
+        #[arg(long, requires = "api_key")]
+        provider: Option<String>,
+        /// API key to store for `--provider`. Ignored without `--provider`.
+        #[arg(long)]
+        api_key: Option<String>,
     },
     /// Manage MCP server configurations
     Mcp(crate::mcp_cmd::McpArgs),
@@ -296,6 +303,18 @@ pub struct AgentArgs {
     /// Override the public xAI API base URL.
     #[arg(long = "xai-api-base-url")]
     pub xai_api_base_url: Option<String>,
+    /// Named BYOP provider to use for this run (e.g. "openai", "anthropic",
+    /// "ollama", or a custom `[provider.*]` name from config.toml).
+    #[arg(long = "provider", value_name = "NAME")]
+    pub provider: Option<String>,
+    /// API key for `--provider` (or `--model`), for this invocation only —
+    /// not persisted. Use `failure login --provider <name> --api-key <key>`
+    /// to store one instead.
+    #[arg(long = "api-key", value_name = "KEY")]
+    pub api_key: Option<String>,
+    /// Base URL for `--provider` (or `--model`), overriding its preset.
+    #[arg(long = "base-url", value_name = "URL")]
+    pub base_url: Option<String>,
     /// Agent runtime mode
     #[command(subcommand)]
     pub mode: Option<AgentCmd>,

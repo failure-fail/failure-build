@@ -3094,6 +3094,7 @@ fn test_model_entry(model_id: &str) -> crate::agent::config::ModelEntry {
             top_p: None,
             api_backend: Default::default(),
             auth_scheme: Default::default(),
+            provider: None,
             extra_headers: Default::default(),
             context_window: std::num::NonZeroU64::new(256_000).unwrap(),
             auto_compact_threshold_percent: None,

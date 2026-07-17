@@ -42,6 +42,19 @@ pub fn has_xai_api_key_env() -> bool {
     read_xai_api_key_env().is_ok()
 }
 
+/// Blessed global env var name for a BYOP provider, e.g. `openai` ->
+/// `FAILURE_OPENAI_API_KEY`. Mirrors `XAI_API_KEY`'s convenience for any
+/// named `[provider.*]` — no per-model `env_key` config required.
+pub fn provider_api_key_env_var(provider: &str) -> String {
+    format!("FAILURE_{}_API_KEY", provider.to_uppercase())
+}
+
+/// Read the blessed global env var for a BYOP provider (see
+/// [`provider_api_key_env_var`]).
+pub fn read_provider_api_key_env(provider: &str) -> Result<String, std::env::VarError> {
+    std::env::var(provider_api_key_env_var(provider))
+}
+
 /// Whether `xai.api_key` should be advertised (and pushed FIRST) when building
 /// the `auth_methods` list at `initialize()` time.
 ///

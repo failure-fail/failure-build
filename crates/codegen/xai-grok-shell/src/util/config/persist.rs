@@ -1405,7 +1405,12 @@ auto_update = true
                 auto_compact_threshold_percent: Some(42),
                 ..ConfigModelOverride::default()
             };
-            let merged = over.apply(TEST_MODEL, Some(base), &endpoints);
+            let merged = over.apply(
+                TEST_MODEL,
+                Some(base),
+                &endpoints,
+                &crate::agent::config::default_provider_entries(),
+            );
             assert_eq!(
                 merged.info.auto_compact_threshold_percent, None,
                 "ConfigModelOverride::apply must NOT merge `auto_compact_threshold_percent` \

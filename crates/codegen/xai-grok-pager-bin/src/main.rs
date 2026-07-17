@@ -68,6 +68,38 @@ fn apply_agent_endpoint_args(
         config.endpoints.xai_api_base_url = v.clone();
     }
 }
+/// Apply `--provider`/`--api-key`/`--base-url` from the CLI into an in-memory
+/// `[model.<key>]` override for this invocation. Ephemeral — not persisted;
+/// `failure login --provider <name> --api-key <key>` is the explicit persist
+/// path. Must run after `apply_agent_endpoint_args` and before anything reads
+/// `config.default_model_override` (model catalog snapshot, auth-method
+/// advertising), and after the earlier plain `--model` assignment so this
+/// wins when both are present.
+fn apply_agent_provider_args(agent_args: &xai_grok_pager::app::AgentArgs, config: &mut AgentConfig) {
+    if agent_args.provider.is_none() && agent_args.api_key.is_none() && agent_args.base_url.is_none()
+    {
+        return;
+    }
+    let key = agent_args
+        .model
+        .clone()
+        .or_else(|| agent_args.provider.clone())
+        .unwrap_or_else(|| "byop".to_string());
+    let entry = config.config_models.entry(key.clone()).or_default();
+    if let Some(provider) = &agent_args.provider {
+        entry.provider = Some(provider.clone());
+    }
+    if let Some(model) = &agent_args.model {
+        entry.model.get_or_insert_with(|| model.clone());
+    }
+    if let Some(k) = &agent_args.api_key {
+        entry.api_key = Some(k.clone());
+    }
+    if let Some(u) = &agent_args.base_url {
+        entry.base_url = Some(u.clone());
+    }
+    config.default_model_override = Some(key);
+}
 /// Resolve --agent-profile path: canonicalize and verify the file exists.
 fn resolve_agent_profile_path(path: &std::path::Path) -> std::path::PathBuf {
     match dunce::canonicalize(path) {
@@ -1057,6 +1089,7 @@ async fn run_agent_command(
         agent_config.plugins.cli_plugin_dirs = agent_args.canonical_plugin_dirs();
     }
     apply_agent_endpoint_args(&agent_args, &mut agent_config);
+    apply_agent_provider_args(&agent_args, &mut agent_config);
     agent_config.remote_settings = remote_settings.clone();
     agent_config.resolve_runtime_fields(&xai_grok_shell::agent::config::RuntimeResolutionContext {
         raw_config: &raw_config,
@@ -1882,9 +1915,23 @@ async fn async_main() -> Result<()> {
                 oauth,
                 device_auth,
                 devbox,
+                provider,
+                api_key,
             } => {
                 init_tracing_simple("cli");
                 let _otel_guard = xai_grok_telemetry::otel_layer::otel_guard();
+                if let (Some(provider), Some(api_key)) = (provider.as_deref(), api_key.as_deref())
+                {
+                    let scope = xai_grok_shell::auth::provider_api_key_scope(provider);
+                    xai_grok_shell::auth::store_provider_api_key(
+                        &xai_grok_shell::util::grok_home::grok_home(),
+                        &scope,
+                        api_key,
+                    )
+                    .map_err(|e| anyhow::anyhow!("Failed to store API key: {e}"))?;
+                    println!("Stored API key for provider \"{provider}\".");
+                    xai_grok_shell::instrumentation::finalize_and_exit(0);
+                }
                 let config = xai_grok_shell::config::load_effective_config_disk_only()
                     .map_err(|e| anyhow::anyhow!("Failed to load config: {e}"))?;
                 let config = AgentConfig::new_from_toml_cfg(&config)

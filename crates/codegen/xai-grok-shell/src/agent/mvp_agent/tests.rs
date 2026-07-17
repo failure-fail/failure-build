@@ -2092,6 +2092,7 @@ fn find_model_by_id_prefers_key_then_falls_back_to_slug() {
             top_p: None,
             api_backend: crate::sampling::ApiBackend::default(),
             auth_scheme: Default::default(),
+            provider: None,
             extra_headers: IndexMap::new(),
             context_window: std::num::NonZeroU64::new(200_000).unwrap(),
             auto_compact_threshold_percent: None,
