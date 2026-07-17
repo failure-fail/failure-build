@@ -310,7 +310,11 @@ pub fn native_tool_name() -> &'static str {
     {
         platform::linux_tool_spec().map_or("arboard", |spec| spec.name)
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(target_os = "android")]
+    {
+        "none"
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "android")))]
     {
         "arboard"
     }
@@ -1165,9 +1169,65 @@ mod platform {
 }
 
 // ---------------------------------------------------------------------------
+// Android: no clipboard backend.
+//
+// `arboard` has no Android implementation at all (its own `platform` module
+// has zero cfg arms for target_os = "android" — not an oversight, Android
+// clipboard access requires JNI calls into `android.content.ClipboardManager`,
+// which is out of scope for a desktop-clipboard crate). Termux itself exposes
+// `termux-clipboard-get`/`-set` (via the separate Termux:API app) but wiring
+// that up is real new work, not a same-behavior stub — so for now Android
+// reports "no clipboard" everywhere, the same shape every other platform
+// already falls back to when its native backend is unavailable at runtime
+// (e.g. arboard failing to open a display).
+// ---------------------------------------------------------------------------
+#[cfg(target_os = "android")]
+mod platform {
+    use super::{ClipboardAttachments, ImageData, NativeWriteOutcome};
+
+    pub(super) fn get_text() -> anyhow::Result<Option<String>> {
+        Ok(None)
+    }
+
+    pub(super) fn get_image() -> anyhow::Result<Option<ImageData>> {
+        Ok(None)
+    }
+
+    pub(super) fn get_file_urls() -> anyhow::Result<Option<String>> {
+        Ok(None)
+    }
+
+    pub(super) fn get_attachments() -> anyhow::Result<ClipboardAttachments> {
+        Ok(ClipboardAttachments::default())
+    }
+
+    pub(super) fn clipboard_image_snapshot() -> (Option<u64>, bool) {
+        (None, false)
+    }
+
+    pub(super) fn clipboard_change_count() -> Option<u64> {
+        None
+    }
+
+    pub(super) fn clipboard_prewarm() {}
+
+    pub(super) fn set_text_with_outcome(_text: &str) -> NativeWriteOutcome {
+        NativeWriteOutcome::default()
+    }
+
+    pub(super) fn set_image_file(_path: &std::path::Path) -> anyhow::Result<()> {
+        anyhow::bail!("clipboard is not supported on Android")
+    }
+
+    pub(super) fn wayland_data_control_supported() -> bool {
+        false
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Linux / Windows: arboard with CLI-tool fallback on Linux
 // ---------------------------------------------------------------------------
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "android")))]
 mod platform {
     use super::ImageData;
     use std::process::{Command, Stdio};

@@ -118,7 +118,11 @@ fn is_platform_home_excluded(cwd: &Path, home: &Path) -> bool {
     false
 }
 
-#[cfg(target_os = "linux")]
+// Termux (Android) has no Desktop/Downloads/etc under $HOME by default, but
+// applying the same heuristic there is harmless (it just never matches) and
+// avoids a 4th target_os-specific arm for a platform that behaves like Linux
+// here.
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn is_platform_home_excluded(cwd: &Path, home: &Path) -> bool {
     let Ok(relative) = cwd.strip_prefix(home) else {
         return false;

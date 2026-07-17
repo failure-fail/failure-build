@@ -46,7 +46,11 @@ fn load_or_compute_agent_id() -> String {
     // - macOS: mid uses unique hardware IDs (serial, UUID, SEID).
     // - Linux: /etc/machine-id is shared across containers from the same base
     //   image, so include $HOSTNAME (container/host name) for uniqueness.
+    // - Android: mid doesn't build there (no target_os arm upstream), so skip
+    //   straight to the same random-UUID fallback the other platforms use
+    //   when mid is unavailable at runtime.
     // - Fallback: random UUIDv4 if mid or hostname are unavailable.
+    #[cfg(not(target_os = "android"))]
     let machine_hash = if cfg!(target_os = "linux") {
         match std::env::var("HOSTNAME") {
             Ok(hostname) if !hostname.is_empty() => {
@@ -58,6 +62,8 @@ fn load_or_compute_agent_id() -> String {
     } else {
         mid::get("agent_id").unwrap_or_else(|_| uuid::Uuid::new_v4().to_string())
     };
+    #[cfg(target_os = "android")]
+    let machine_hash = uuid::Uuid::new_v4().to_string();
     let id = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, machine_hash.as_bytes()).to_string();
 
     // Save to cache file (best effort, ignore errors)

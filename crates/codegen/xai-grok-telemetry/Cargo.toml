@@ -59,7 +59,6 @@ xai-file-utils = { path = "../xai-file-utils" }
 whoami = { workspace = true }
 uuid = { workspace = true, features = ["v5", "v7"] }
 obfstr = { workspace = true, optional = true }
-mid = "4.0.0"
 tokio = { workspace = true, features = ["macros", "sync", "rt"] }
 parking_lot = { workspace = true }
 xai-grok-auth = { workspace = true }
@@ -77,6 +76,14 @@ async-trait = { workspace = true }
 futures-executor = "0.3"
 tokio-stream = { workspace = true }
 tracing-opentelemetry = { workspace = true }
+
+# mid 4.0.0's own lib.rs only has target_os arms for linux/macos/windows — no
+# fallback, so the crate itself fails to compile on android (a distinct
+# target_os from linux despite sharing a kernel). id.rs's one call site is
+# already designed to gracefully fall back to a random UUID when mid fails at
+# runtime, so android just skips mid entirely and always takes that path.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+mid = "4.0.0"
 
 [dev-dependencies]
 tonic = { workspace = true, features = ["transport"] }

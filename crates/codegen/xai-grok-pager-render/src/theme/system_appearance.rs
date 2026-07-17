@@ -65,6 +65,21 @@ pub fn detect_with_osc11_fallback() -> Option<SystemAppearance> {
 }
 
 /// Inner detection via desktop APIs only (no mock, no OSC 11).
+///
+/// `dark-light` has no real Android backend: unrecognized platforms (which
+/// includes Android — it isn't in the crate's macOS/Windows/Linux-family
+/// list) fall through to a generic stub whose `detect()` unconditionally
+/// returns `Mode::Light` — and with a *different return type* to boot
+/// (`Mode` rather than `Result<Mode, Error>`), since that stub can't fail.
+/// There's no real desktop-appearance concept for a Termux CLI process
+/// anyway, so Android skips the crate entirely rather than trust that
+/// meaningless hardcoded answer.
+#[cfg(target_os = "android")]
+fn detect_without_mock() -> Option<SystemAppearance> {
+    None
+}
+
+#[cfg(not(target_os = "android"))]
 fn detect_without_mock() -> Option<SystemAppearance> {
     match dark_light::detect() {
         Ok(dark_light::Mode::Dark) => Some(SystemAppearance::Dark),
