@@ -29,12 +29,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Check launcher syntax
-        run: node --check bin/failure
-      - name: Check MCP bridge syntax
-        run: node --check bin/mcp-server.js
-      - name: Run MCP protocol smoke test
-        run: node scripts/test-mcp-server.js
+      - name: Run MCP and Cloudflare Worker tests
+        run: npm run test:mcp
       - name: Verify npm package contents
         run: npm pack --dry-run
 
