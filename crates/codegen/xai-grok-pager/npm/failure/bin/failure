@@ -1,17 +1,6 @@
 #!/usr/bin/env node
 // Thin trampoline: resolves the failure binary from the matching per-platform
 // optional dependency package and execs it.
-//
-// Falls back to bootstrapping the canonical ~/.failure/bin/failure-<version> symlink
-// layout if postinstall hasn't run (e.g. npx, or postinstall failure).
-//
-// Binary location strategy (in priority order):
-//   1. ~/.failure/bin/failure        — canonical versioned symlink (postinstall.js)
-//   2. @failure-build/failure-<platform>/bin/failure[.exe]      — decompressed sibling
-//   3. @failure-build/failure-<platform>/bin/failure[.exe].br   — brotli-compressed
-//
-// Per-platform binaries are shipped brotli-compressed to stay well under
-// npm's ~200 MB tarball ceiling. See sibling packages @failure-build/failure-*.
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -111,43 +100,72 @@ function resolveBinary() {
     return version ? bootstrapCanonical(rawPath, version) : rawPath;
 }
 
+function runPackageUtility() {
+    if (process.argv[2] !== 'mcp-worker') return false;
+    const script = path.join(__dirname, 'cloudflare-worker.js');
+    const child = spawn(process.execPath, [script, ...process.argv.slice(3)], {
+        stdio: 'inherit',
+        env: process.env,
+        windowsHide: true,
+    });
+    child.on('exit', (code, signal) => {
+        if (signal) process.kill(process.pid, signal);
+        else process.exit(code ?? 0);
+    });
+    child.on('error', (error) => {
+        console.error(`${pkgName}: Cloudflare Worker configuration failed: ${error.message}`);
+        process.exit(1);
+    });
+    return true;
+}
+
+if (runPackageUtility()) {
+    return;
+}
+
 function shouldStartMcp() {
     if (process.env.FAILURE_MCP_CHILD === '1') return false;
     if (process.env.FAILURE_MCP_ENABLED === '0') return false;
 
     const first = process.argv[2];
     const skip = new Set([
-        'completions', 'export', 'inspect', 'login', 'logout', 'mcp', 'memory',
-        'models', 'plugin', 'sessions', 'setup', 'trace', 'update', 'version',
-        'worktree', '--help', '-h', '--version', '-v',
+        'completions', 'export', 'inspect', 'login', 'logout', 'mcp', 'mcp-worker',
+        'memory', 'models', 'plugin', 'sessions', 'setup', 'trace', 'update',
+        'version', 'worktree', '--help', '-h', '--version', '-v',
     ]);
     return !first || !skip.has(first);
 }
 
-function startMcpBridge() {
-    if (!shouldStartMcp()) return null;
-    const script = path.join(__dirname, 'mcp-server.js');
+function startNodeSidecar(scriptName, args = []) {
+    const script = path.join(__dirname, scriptName);
     if (!fs.existsSync(script)) return null;
-
-    // Point the bridge back at this launcher, not directly at the native binary.
-    // FAILURE_MCP_CHILD prevents recursion, while keeping package resolution and
-    // command compatibility centralized in one place.
-    const child = spawn(process.execPath, [script, '--failure-bin', __filename], {
+    const child = spawn(process.execPath, [script, ...args], {
         stdio: ['ignore', 'ignore', 'inherit'],
         env: { ...process.env, FAILURE_BIN: __filename },
         windowsHide: true,
     });
     child.on('error', (error) => {
-        console.error(`${pkgName}: MCP bridge failed to start: ${error.message}`);
+        console.error(`${pkgName}: ${scriptName} failed to start: ${error.message}`);
     });
     return child;
 }
 
+function startMcpSidecars() {
+    if (!shouldStartMcp()) return [];
+    const sidecars = [];
+    const bridge = startNodeSidecar('mcp-server.js', ['--failure-bin', __filename]);
+    if (bridge) sidecars.push(bridge);
+
+    const workerConfig = path.join(os.homedir(), '.failure', 'cloudflare-worker.json');
+    if (fs.existsSync(workerConfig)) {
+        const workerDaemon = startNodeSidecar('cloudflare-worker-daemon.js');
+        if (workerDaemon) sidecars.push(workerDaemon);
+    }
+    return sidecars;
+}
+
 function forwardedArgs() {
     const args = process.argv.slice(2);
-    // The MCP bridge historically requested a JSON session listing. The native
-    // command now requires an explicit `list` subcommand and prints stable text.
-    // Translate the compatibility form here so older bridge builds still work.
     if (
         process.env.FAILURE_MCP_CHILD === '1'
         && args.length === 2
@@ -160,28 +178,27 @@ function forwardedArgs() {
 }
 
 const execPath = resolveBinary();
-const mcp = startMcpBridge();
+const sidecars = startMcpSidecars();
 const childEnv = { ...process.env, FAILURE_MANAGED_BY_NPM: '1' };
 const child = spawn(execPath, forwardedArgs(), { stdio: 'inherit', env: childEnv });
 
-function stopMcp() {
-    if (!mcp || mcp.killed) return;
-    try { mcp.kill(); } catch {}
+function stopSidecars() {
+    for (const sidecar of sidecars) {
+        if (sidecar.killed) continue;
+        try { sidecar.kill(); } catch {}
+    }
 }
 
 child.on('exit', (code, signal) => {
-    stopMcp();
-    if (signal) {
-        process.kill(process.pid, signal);
-    } else {
-        process.exit(code ?? 0);
-    }
+    stopSidecars();
+    if (signal) process.kill(process.pid, signal);
+    else process.exit(code ?? 0);
 });
 child.on('error', (error) => {
-    stopMcp();
+    stopSidecars();
     console.error(`${pkgName}: failed to launch Failure: ${error.message}`);
     process.exit(1);
 });
-process.on('SIGINT', stopMcp);
-process.on('SIGTERM', stopMcp);
-process.on('exit', stopMcp);
+process.on('SIGINT', stopSidecars);
+process.on('SIGTERM', stopSidecars);
+process.on('exit', stopSidecars);
