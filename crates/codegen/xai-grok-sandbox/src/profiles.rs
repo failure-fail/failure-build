@@ -3,19 +3,19 @@
 //! A custom profile's `deny` list is kernel-enforced (read + write/rename) on
 //! both platforms.
 
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 use nono::{AccessMode, CapabilitySet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 use crate::deny::{
     apply_deny_globs_to_capability_set, apply_deny_paths_to_capability_set, effective_deny_paths,
     partition_deny_entries,
 };
 use crate::paths::grok_home;
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 use crate::paths::{
     DEVICE_DIRS, DEVICE_FILES, essential_writable_paths, essential_writable_paths_minimal,
 };
@@ -183,7 +183,7 @@ fn load_config_file(path: &Path) -> Option<SandboxConfig> {
     }
 }
 
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 impl ProfileName {
     /// Convert this profile into a nono `CapabilitySet` for the given workspace.
     pub fn to_capability_set(&self, workspace: &Path) -> anyhow::Result<CapabilitySet> {
@@ -519,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "enforce", unix))]
+    #[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
     fn strict_allowlist_includes_run_and_var_when_present() {
         // Regression: /run (resolv realpath) + /var (NSS/SSSD) when present.
         let workspace = std::env::temp_dir();
@@ -544,7 +544,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "enforce", unix))]
+    #[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
     fn base_profile_capability_set_builds() {
         // A base profile with no `deny` builds a CapabilitySet without erroring.
         let workspace = std::env::current_dir().unwrap();
@@ -554,7 +554,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "enforce", unix))]
+    #[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
     fn custom_profile_from_config() {
         let workspace = std::env::current_dir().unwrap();
         let config = SandboxConfig {
@@ -576,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "enforce", unix))]
+    #[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
     fn custom_extends_devbox_has_no_data_in_deny() {
         // Regression: devbox excludes /data via a local list, not profile.deny, so
         // a custom profile extending devbox must not inherit /data into the kernel
@@ -604,7 +604,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "enforce", unix))]
+    #[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
     fn custom_profile_not_found() {
         let workspace = std::env::current_dir().unwrap();
         let config = SandboxConfig::default();
@@ -723,7 +723,7 @@ read_write = ["/tmp/ci-artifacts"]
     }
 
     #[test]
-    #[cfg(all(feature = "enforce", unix))]
+    #[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
     fn extends_off_returns_err_not_panic() {
         let workspace = std::env::current_dir().unwrap();
         let config = SandboxConfig {
@@ -749,7 +749,7 @@ read_write = ["/tmp/ci-artifacts"]
     }
 
     #[test]
-    #[cfg(all(feature = "enforce", unix))]
+    #[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
     fn resolve_off_returns_err_not_panic() {
         let workspace = std::env::current_dir().unwrap();
         let err = ProfileName::Off

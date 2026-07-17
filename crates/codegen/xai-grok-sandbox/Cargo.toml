@@ -18,6 +18,20 @@ xai-grok-config = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
+# globset validates every deny glob on BOTH platforms (so a glob is interpreted
+# identically or rejected identically) and matches them on Linux. Non-optional for
+# the same reason as nono below.
+globset = { workspace = true }
+
+# nono 0.53.0's own dedup-key code in `CapabilitySet::merge` (capability.rs) only
+# has `#[cfg(target_os = "macos")]`/`#[cfg(target_os = "linux")]` arms for the `key`
+# binding — Android is a distinct `target_os` from "linux" despite being a Linux
+# kernel, so neither arm fires and the crate fails to compile there (upstream bug,
+# not ours to fix from this tree). Excluding android here stops Cargo from building
+# nono for that target at all; the `cfg(all(feature = "enforce", unix, not(target_os
+# = "android")))` gates on its usage sites fall back to the existing no-kernel-sandbox
+# stub path (the same one non-unix targets already use).
+#
 # Pinned exact: the macOS Seatbelt deny precedence (see deny.rs `emit_seatbelt_deny`)
 # depends on nono's observed rule-emission order. A bump can silently change it and
 # re-open the `mv x y && cat y` bypass with `is_applied()` still true, so re-verify
@@ -25,14 +39,11 @@ libc = { workspace = true }
 #
 # Non-optional (not gated on `enforce`): Cargo has no target-conditional features
 # table, so a `dep:nono` reference from the cross-platform `enforce` feature would
-# break feature resolution on non-unix targets (e.g. Windows builds). nono/globset
-# are unix-only here, so they only compile on unix anyway; the enforce *code*
-# stays gated on `cfg(all(feature = "enforce", unix))`.
+# break feature resolution on non-unix targets (e.g. Windows builds). nono is
+# unix-minus-android here, so it only compiles where the enforce code actually
+# references it.
+[target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
 nono = { version = "=0.53.0", default-features = false }
-# globset validates every deny glob on BOTH platforms (so a glob is interpreted
-# identically or rejected identically) and matches them on Linux. Non-optional for
-# the same reason as nono above.
-globset = { workspace = true }
 
 # Linux additionally walks the tree to expand globs to existing paths (enforce+
 # linux only). cfg(linux)-gated rather than enforce-gated: the cross-platform
@@ -45,8 +56,9 @@ ignore = { workspace = true }
 default = ["enforce"]
 ## Enable kernel-enforced sandboxing via nono (Landlock/Seatbelt). Marker feature
 ## only: the backing deps (nono/globset) are non-optional unix-only deps (see
-## above), and the enforce code is gated on `cfg(all(feature = "enforce", unix))`.
-## On non-unix targets enabling this feature is a no-op (no kernel sandbox exists).
+## above), and the enforce code is gated on `cfg(all(feature = "enforce", unix,
+## not(target_os = "android")))`. On non-unix targets and Android, enabling this
+## feature is a no-op (no kernel sandbox exists / nono doesn't build there).
 enforce = []
 
 [dev-dependencies]

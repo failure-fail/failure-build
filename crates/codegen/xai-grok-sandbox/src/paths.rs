@@ -4,7 +4,7 @@
 //! ecosystem (package-manager / toolchain) writable paths into helpers
 //! consumed by [`super::profiles`].
 
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -25,7 +25,7 @@ pub(crate) fn grok_home() -> PathBuf {
 ///
 /// These are individual files (use `allow_file`, not `allow_path`).
 /// `/dev/pts` is a directory (PTY slaves on Linux) so it uses `allow_path`.
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 pub(crate) const DEVICE_FILES: &[&str] = &[
     "/dev/null",    // output sink — used by virtually every CLI tool
     "/dev/zero",    // zero source — used by memory allocators
@@ -37,7 +37,7 @@ pub(crate) const DEVICE_FILES: &[&str] = &[
 ];
 
 /// Device directories that need write access.
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 pub(crate) const DEVICE_DIRS: &[&str] = &[
     "/dev/pts", // PTY slaves (Linux)
 ];
@@ -51,7 +51,7 @@ pub(crate) const DEVICE_DIRS: &[&str] = &[
 /// `/private/var/folders/` (the real `TMPDIR` / `NSTemporaryDirectory()`).
 /// git, compilers, and other tools write temp files to `$TMPDIR` which
 /// resolves to `/private/var/folders/xx/.../T/` on macOS.
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 pub(crate) fn temp_writable_paths() -> Vec<PathBuf> {
     let mut paths = vec![PathBuf::from("/tmp"), PathBuf::from("/var/tmp")];
 
@@ -81,7 +81,7 @@ pub(crate) fn temp_writable_paths() -> Vec<PathBuf> {
 
 /// Writable directory paths for profiles that allow workspace writes (workspace, devbox, strict).
 /// Device files are handled separately via `allow_file` in `to_capability_set_with_config`.
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 pub(crate) fn essential_writable_paths(workspace: &Path) -> Vec<PathBuf> {
     let mut paths = vec![workspace.to_path_buf(), grok_home()];
     paths.extend(temp_writable_paths());
@@ -90,7 +90,7 @@ pub(crate) fn essential_writable_paths(workspace: &Path) -> Vec<PathBuf> {
 
 /// Writable directory paths for the read-only profile (minimal: just ~/.failure + temp).
 /// Device files are handled separately via `allow_file` in `to_capability_set_with_config`.
-#[cfg(all(feature = "enforce", unix))]
+#[cfg(all(feature = "enforce", unix, not(target_os = "android")))]
 pub(crate) fn essential_writable_paths_minimal() -> Vec<PathBuf> {
     let mut paths = vec![grok_home()];
     paths.extend(temp_writable_paths());
