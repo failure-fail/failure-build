@@ -19,7 +19,8 @@
         "x64"
     ],
     "scripts": {
-        "postinstall": "node bin/postinstall.js"
+        "postinstall": "node bin/postinstall.js",
+        "test:mcp": "node --check bin/mcp-server.js && node scripts/test-mcp-server.js"
     },
     "publishConfig": {
         "access": "public"
