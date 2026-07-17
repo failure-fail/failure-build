@@ -180,6 +180,10 @@ npm i -g @failure-build/failure@latest
 | Linux | x86_64, arm64 |
 | Windows | x86_64 |
 
+This fork's first release only publishes a linux-x86_64 binary; the other
+platforms are wired up in `.github/workflows/release.yml` but haven't had a
+release run for them yet.
+
 ## Documentation
 
 See [`docs/user-guide`](https://github.com/failure-fail/failure-build/tree/main/crates/codegen/xai-grok-pager/docs/user-guide)
