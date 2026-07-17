@@ -34,8 +34,6 @@ jobs:
             platform: linux-aarch64
           - os: macos-14
             platform: macos-aarch64
-          - os: macos-13
-            platform: macos-x86_64
           - os: windows-latest
             platform: windows-x86_64
     runs-on: ${{ matrix.os }}
@@ -71,6 +69,14 @@ jobs:
           echo "PROTOC=$protocPath" >> $env:GITHUB_ENV
 
       - name: Build release binary
+        # MSVC's link.exe hits "LNK4319: A PDB limit was hit" on this
+        # workspace's release binary — too many/too-long symbol names for one
+        # PDB. /DEBUG:LongSymbolTruncate is link.exe's own suggested fix (see
+        # the LNK4318 warning); it truncates long names instead of dropping
+        # debug info outright, so this doesn't affect Linux/macOS or disable
+        # symbolication for crash reporting.
+        env:
+          RUSTFLAGS: ${{ runner.os == 'Windows' && '-C link-arg=/DEBUG:LongSymbolTruncate' || '' }}
         run: cargo build --release -p xai-grok-pager-bin
 
       - name: Stage artifact (Unix)

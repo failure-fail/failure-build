@@ -49,12 +49,12 @@ irm https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/cod
 ```
 
 Both installers pull binaries from this repo's
-[GitHub Releases](https://github.com/failure-fail/failure-build/releases).
-**This fork's first release only ships a linux-x86_64 binary** — macOS,
-Windows, and linux-arm64 builds need this repo's own CI cross-compilation
-set up (see `crates/codegen/xai-grok-pager/npm/failure/scripts/assemble-platform-packages.js`
-for the six targets it expects) and aren't published yet. On an unsupported
-platform, fall back to [Building from source](#building-from-source) below.
+[GitHub Releases](https://github.com/failure-fail/failure-build/releases),
+built by `.github/workflows/release.yml` for linux-x86_64/arm64,
+macos-aarch64 (Apple Silicon), and windows-x86_64. macOS Intel (x86_64) isn't
+built — GitHub no longer reliably provisions hosted Intel Mac runners — so
+Intel Mac users should fall back to
+[Building from source](#building-from-source) below.
 
 ## Building from source
 

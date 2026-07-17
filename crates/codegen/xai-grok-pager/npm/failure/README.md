@@ -180,9 +180,9 @@ npm i -g @failure-build/failure@latest
 | Linux | x86_64, arm64 |
 | Windows | x86_64 |
 
-This fork's first release only publishes a linux-x86_64 binary; the other
-platforms are wired up in `.github/workflows/release.yml` but haven't had a
-release run for them yet.
+macOS Intel (x86_64) isn't built by `.github/workflows/release.yml` — GitHub
+no longer reliably provisions hosted Intel Mac runners (`macos-13` jobs never
+left the queue). Build from source on Intel Macs in the meantime.
 
 ## Documentation
 
