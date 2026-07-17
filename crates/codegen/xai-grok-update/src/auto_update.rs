@@ -25,21 +25,21 @@ pub enum UpdateRunMode {
 
 const PROMPT_UPDATE_NOW: &str = "Update now? [Y/n/d]";
 const MSG_AUTO_UPDATE_BACKGROUND: &str = "Auto-update running in background.";
-const MSG_RUN_UPDATE_MANUAL: &str = "Run `grok update` to get the latest version.";
+const MSG_RUN_UPDATE_MANUAL: &str = "Run `failure update` to get the latest version.";
 /// Manual-install one-liner for this platform's bootstrap installer.
 fn manual_install_cmd() -> &'static str {
     if cfg!(windows) {
-        "irm https://x.ai/cli/install.ps1 | iex"
+        "irm https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.ps1 | iex"
     } else {
-        "curl -fsSL https://x.ai/cli/install.sh | bash"
+        "curl -fsSL https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.sh | bash"
     }
 }
 
 /// Build a reinstall hint for a known installer type.
 fn reinstall_hint(installer: &str) -> String {
     match installer {
-        "npm" => "Please reinstall via npm:\n  npm i -g @xai-official/grok".to_string(),
-        "gh-release" => "Please reinstall via GitHub Releases:\n  gh release download --repo xai-org-shared/grok-build --pattern 'grok-*' --output grok && chmod +x grok".to_string(),
+        "npm" => "Please reinstall via npm:\n  npm i -g @failure-build/failure".to_string(),
+        "gh-release" => "Please reinstall via GitHub Releases:\n  gh release download --repo failure-fail/failure-build --pattern 'failure-*' --output failure && chmod +x failure".to_string(),
         _ => format!("Please reinstall via:\n  {}", manual_install_cmd()),
     }
 }
@@ -203,7 +203,7 @@ pub struct EnsureLatestOutcome {
 ///
 /// Unlike [`run_update`] this never uses the compiled-in version for the
 /// download decision — a binary already installed by another process (TUI
-/// background download, explicit `grok update`) is reused as-is. This both
+/// background download, explicit `failure update`) is reused as-is. This both
 /// removes the duplicate download in leader mode and stops the pre-fix
 /// hourly re-download while a busy leader keeps deferring its relaunch.
 ///
@@ -254,7 +254,7 @@ pub async fn ensure_latest_on_disk(update_config: &UpdateConfig) -> Result<Ensur
 }
 
 /// Disk-version probe gated on the installer actually maintaining the
-/// managed `~/.failure/bin/grok` symlink.
+/// managed `~/.failure/bin/failure` symlink.
 ///
 /// Only the internal (install.sh / CDN) and gh-release installers write that
 /// symlink. npm manages its own global install, so for npm a symlink left
@@ -360,7 +360,7 @@ pub struct BackgroundUpdateCheck {
     /// `Some` when the *running* binary is older than the channel pointer —
     /// drives the in-TUI restart hint regardless of who downloads the binary.
     pub update: Option<UpdateAvailable>,
-    /// Handle to the background `grok update` child, `Some` only when a
+    /// Handle to the background `failure update` child, `Some` only when a
     /// download was actually started (the on-disk install was behind the
     /// pointer). The TUI parks this and `wait()`s on it at quit-for-update
     /// time instead of spawning a second downloader.
@@ -381,7 +381,7 @@ impl BackgroundUpdateCheck {
 /// Sets [`BackgroundUpdateCheck::update`] when the running binary is older
 /// than the channel pointer. If `auto_update` is enabled **and the on-disk
 /// install is also behind the pointer**, kicks off a non-blocking download
-/// (spawns `grok update` as a detached child process) so the new binary is
+/// (spawns `failure update` as a detached child process) so the new binary is
 /// ready when the user quits and relaunches. When another process (an earlier
 /// TUI, the leader's hourly checker) already put the target version on disk,
 /// no download is started — only the restart hint is surfaced.
@@ -421,7 +421,7 @@ pub async fn check_update_background(update_config: &UpdateConfig) -> Background
 
     // Only download when the on-disk install is behind the pointer; the
     // running process being stale (checked above) just means "show the
-    // restart hint". The quit-for-update path's `grok update` child resolves
+    // restart hint". The quit-for-update path's `failure update` child resolves
     // to "Already up to date" against the same disk state. Gated on the
     // installer maintaining the managed symlink — for npm a leftover symlink
     // would wrongly suppress the download (see `disk_version_for_installer`).
@@ -586,7 +586,7 @@ pub async fn run_update_if_available(
     Ok(false)
 }
 
-/// Launch "grok update" in blocking or non-blocking mode.
+/// Launch "failure update" in blocking or non-blocking mode.
 ///
 /// In `NonBlocking` mode the spawned child's handle is returned so the caller
 /// can later `wait()` on the in-flight download (e.g. the TUI's
@@ -617,7 +617,7 @@ async fn run_update_subcommand(run_mode: UpdateRunMode) -> Result<Option<tokio::
             // No detach: the child must stay in the foreground process group so Ctrl+C cancels it with the parent; the atomic install protocol makes mid-download kills safe.
             let status = cmd.status().await?;
             if !status.success() {
-                anyhow::bail!("grok update failed with {}", status);
+                anyhow::bail!("failure update failed with {}", status);
             }
             Ok(None)
         }
@@ -634,11 +634,11 @@ async fn run_update_subcommand(run_mode: UpdateRunMode) -> Result<Option<tokio::
     }
 }
 
-/// Resolve the grok binary path for re-execution after an update.
+/// Resolve the failure binary path for re-execution after an update.
 ///
 /// `current_exe()` resolves symlinks via `/proc/self/exe` (see proc(5)),
 /// so it returns the old versioned target after a symlink swap.
-/// Prefer `~/.failure/bin/grok` which always points to the latest version.
+/// Prefer `~/.failure/bin/failure` which always points to the latest version.
 fn resolve_restart_exe() -> Result<std::path::PathBuf> {
     let canonical = grok_application();
     if canonical.exists() {
@@ -647,7 +647,7 @@ fn resolve_restart_exe() -> Result<std::path::PathBuf> {
     Ok(std::env::current_exe()?)
 }
 
-/// Restart grok with the original command-line arguments to pick up the update.
+/// Restart failure with the original command-line arguments to pick up the update.
 pub fn restart_grok() -> Result<()> {
     let exe = resolve_restart_exe()?;
     let mut cmd = Command::new(exe);
@@ -656,7 +656,7 @@ pub fn restart_grok() -> Result<()> {
     }
     cmd.env_clear();
     cmd.envs(std::env::vars_os().filter(|(k, _)| k != "FAILURE_AUTO_UPDATE"));
-    eprintln!("Restarting Grok...");
+    eprintln!("Restarting Failure Build...");
 
     // Use exec on Unix to replace the current process, avoiding stdio issues
     // when the parent exits. On Windows, fall back to spawn + exit.
@@ -748,8 +748,8 @@ const DOWNLOAD_REQUEST_TIMEOUT: Duration = Duration::from_secs(20 * 60);
 ///
 /// Appends `.{pid}-{seq}.tmp` to the FULL file name instead of using
 /// `Path::with_extension`, which treats everything after the last dot of the
-/// versioned name as the extension (`grok-0.1.181-linux-x86_64` →
-/// `grok-0.1.tmp`) and therefore collides for every `0.1.x` version. The PID
+/// versioned name as the extension (`failure-0.1.181-linux-x86_64` →
+/// `failure-0.1.tmp`) and therefore collides for every `0.1.x` version. The PID
 /// plus a per-process counter makes the name unique per download attempt —
 /// across processes (two updaters racing in the same instant, the accepted
 /// lock-free residual race) and within one process — so no racer can ever
@@ -760,7 +760,7 @@ fn tmp_download_path(dest: &std::path::Path) -> std::path::PathBuf {
 }
 
 /// Unique temp path `<base>.{pid}-{seq}.{ext}`, appended to the full name so a
-/// versioned base like `grok-0.1.181` doesn't collide via `with_extension`.
+/// versioned base like `failure-0.1.181` doesn't collide via `with_extension`.
 /// PID + per-process counter keep racing updaters from clobbering each other.
 fn unique_temp_sibling(base: &std::path::Path, ext: &str) -> std::path::PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -1158,7 +1158,7 @@ pub async fn install_internal_from_base(
 }
 
 /// A downloaded and smoke-tested binary in `~/.failure/downloads/`, not yet
-/// activated as the managed `grok`/`agent`.
+/// activated as the managed `failure`/`agent`.
 struct VerifiedDownload {
     version: String,
     binary_path: std::path::PathBuf,
@@ -1191,16 +1191,16 @@ async fn download_verified_from_base(
     let download_dir = grok_home.join("downloads");
     tokio::fs::create_dir_all(&download_dir).await?;
 
-    let binary_name = format!("grok-{}-{}", version, platform);
+    let binary_name = format!("failure-{}-{}", version, platform);
     let binary_path = download_dir.join(&binary_name);
 
-    eprintln!("  Downloading grok v{} ({})...", version, platform);
+    eprintln!("  Downloading failure v{} ({})...", version, platform);
 
     // Published already +x (see `publish_downloaded_artifact`).
     download_cli_artifact_from_gcs(gcs_base_url, &binary_name, &binary_path, true).await?;
 
     // Smoke-test: run the binary before activating it. A truncated or
-    // corrupt download is caught here and never becomes the active grok.
+    // corrupt download is caught here and never becomes the active failure.
     if !smoke_test_binary(&binary_path).await {
         let _ = tokio::fs::remove_file(&binary_path).await;
         // No prefix: run_install_script's wrap adds "Auto-update failed:".
@@ -1227,7 +1227,7 @@ async fn activate_verified_download(download: &VerifiedDownload) -> Result<()> {
     let bin_dir = grok_home.join("bin");
     tokio::fs::create_dir_all(&bin_dir).await?;
 
-    // Atomic swap of ~/.failure/bin/{grok,agent} -> downloaded binary.
+    // Atomic swap of ~/.failure/bin/{failure,agent} -> downloaded binary.
     let link_path = swap_managed_bin_links(&download.binary_path, &bin_dir).await?;
 
     remove_stale_pager(&bin_dir).await;
@@ -1235,7 +1235,7 @@ async fn activate_verified_download(download: &VerifiedDownload) -> Result<()> {
     eprintln!();
 
     // Clean up old versioned binaries (keeps current + 1 previous).
-    cleanup_old_downloads(&download_dir, "grok", &download.version).await;
+    cleanup_old_downloads(&download_dir, "failure", &download.version).await;
     cleanup_old_downloads(&download_dir, "grok-pager", &download.version).await;
 
     // Persist installer to config.toml so future runs auto-detect internal.
@@ -1264,9 +1264,9 @@ async fn regenerate_completions(binary: &std::path::Path, grok_home: &std::path:
     let user_home = std::env::home_dir().unwrap_or_default();
 
     let completions: &[(&str, std::path::PathBuf)] = &[
-        ("bash", grok_home.join("completions/bash/grok.bash")),
-        ("zsh", grok_home.join("completions/zsh/_grok")),
-        ("fish", user_home.join(".config/fish/completions/grok.fish")),
+        ("bash", grok_home.join("completions/bash/failure.bash")),
+        ("zsh", grok_home.join("completions/zsh/_failure")),
+        ("fish", user_home.join(".config/fish/completions/failure.fish")),
     ];
 
     for (shell, dest) in completions {
@@ -1290,11 +1290,11 @@ async fn regenerate_completions(binary: &std::path::Path, grok_home: &std::path:
 
 /// Compute a relative symlink target from `link` to `target`.
 ///
-/// When both paths share a grandparent (e.g. `~/.failure/bin/grok` and
-/// `~/.failure/downloads/grok-0.1.203-linux-x86_64`), returns a relative path
-/// like `../downloads/grok-0.1.203-linux-x86_64`.  When they share the same
-/// parent directory, returns just the filename.  Falls back to the absolute
-/// `target` path for any other layout.
+/// When both paths share a grandparent (e.g. `~/.failure/bin/failure` and
+/// `~/.failure/downloads/failure-0.1.203-linux-x86_64`), returns a relative
+/// path like `../downloads/failure-0.1.203-linux-x86_64`.  When they share
+/// the same parent directory, returns just the filename.  Falls back to the
+/// absolute `target` path for any other layout.
 ///
 /// Relative symlinks survive Docker bind-mounts where `~/.failure/` is mapped
 /// into a container with a different `$HOME` (and thus a different absolute
@@ -1304,13 +1304,13 @@ fn relative_symlink_target(target: &std::path::Path, link: &std::path::Path) -> 
     let (Some(target_parent), Some(link_parent)) = (target.parent(), link.parent()) else {
         return target.to_path_buf();
     };
-    // Same directory — just the filename (e.g. grok-latest -> grok-0.1.203-…)
+    // Same directory — just the filename (e.g. failure-latest -> failure-0.1.203-…)
     if target_parent == link_parent
         && let Some(name) = target.file_name()
     {
         return std::path::PathBuf::from(name);
     }
-    // Sibling directories — ../target_dir/filename (e.g. bin/grok -> ../downloads/grok-…)
+    // Sibling directories — ../target_dir/filename (e.g. bin/failure -> ../downloads/failure-…)
     if let (Some(tp), Some(lp)) = (target_parent.parent(), link_parent.parent())
         && tp == lp
         && let (Some(dir_name), Some(file_name)) = (target_parent.file_name(), target.file_name())
@@ -1320,12 +1320,12 @@ fn relative_symlink_target(target: &std::path::Path, link: &std::path::Path) -> 
     target.to_path_buf()
 }
 
-/// Swap `~/.failure/bin/{grok,agent}` to point at `binary_path`. Returns the
-/// `grok` link path (for [`regenerate_completions`]).
+/// Swap `~/.failure/bin/{failure,agent}` to point at `binary_path`. Returns
+/// the `failure` link path (for [`regenerate_completions`]).
 ///
-/// `grok` and `agent` are first-class entry points that the bootstrap
+/// `failure` and `agent` are first-class entry points that the bootstrap
 /// installers (`install.sh`, `install.ps1`, `install-enterprise.sh`)
-/// maintain in lockstep, and so must the updater — otherwise `grok update`
+/// maintain in lockstep, and so must the updater — otherwise `failure update`
 /// leaves `agent` pinned at the previous version.
 ///
 /// Unix: atomic symlink swap with relative target (survives Docker
@@ -1342,11 +1342,11 @@ async fn swap_managed_bin_links(
     binary_path: &std::path::Path,
     bin_dir: &std::path::Path,
 ) -> Result<std::path::PathBuf> {
-    let grok_name = if cfg!(windows) { "grok.exe" } else { "grok" };
+    let failure_name = if cfg!(windows) { "failure.exe" } else { "failure" };
     let agent_name = if cfg!(windows) { "agent.exe" } else { "agent" };
-    let grok_link = bin_dir.join(grok_name);
+    let failure_link = bin_dir.join(failure_name);
     let agent_link = bin_dir.join(agent_name);
-    let link_paths: [std::path::PathBuf; 2] = [grok_link.clone(), agent_link];
+    let link_paths: [std::path::PathBuf; 2] = [failure_link.clone(), agent_link];
 
     // Capture every link up-front so a 2nd-link capture failure can't
     // strand the 1st mid-swap.
@@ -1415,7 +1415,7 @@ async fn swap_managed_bin_links(
     for cap in &captured {
         cap.cleanup().await;
     }
-    Ok(grok_link)
+    Ok(failure_link)
 }
 
 /// Snapshot of a managed-bin link's prior state for rollback in
@@ -1685,7 +1685,7 @@ async fn windows_replace_exe(src: &std::path::Path, dest: &std::path::Path) -> R
     rename_result.map_err(|e| {
         anyhow::anyhow!(
             "cannot rename locked executable {}: {e}\n\
-             Close all running grok sessions and retry.",
+             Close all running failure sessions and retry.",
             dest.display(),
         )
     })?;
@@ -1801,7 +1801,7 @@ async fn cleanup_old_downloads(dir: &std::path::Path, bin_prefix: &str, current_
             }
             continue;
         }
-        // Skip symlinks (e.g. grok-latest).
+        // Skip symlinks (e.g. failure-latest).
         if let Ok(ft) = entry.file_type().await
             && ft.is_symlink()
         {
@@ -1814,8 +1814,8 @@ async fn cleanup_old_downloads(dir: &std::path::Path, bin_prefix: &str, current_
             continue;
         }
         // Extract the version portion via the shared parser (handles the
-        // internal `grok-0.1.150-macos-aarch64`, pre-release, and npm
-        // `grok-0.1.150` layouts — see `version_from_versioned_binary_name`).
+        // internal `failure-0.1.150-macos-aarch64`, pre-release, and npm
+        // `failure-0.1.150` layouts — see `version_from_versioned_binary_name`).
         let Some(ver_str) = crate::version::version_from_versioned_binary_name(&name, bin_prefix)
         else {
             continue;
@@ -1901,7 +1901,7 @@ async fn gh_release_download(tag: &str, pattern: &str, dest: &std::path::Path) -
     Ok(())
 }
 
-/// Download and install grok from GitHub Releases (xai-org-shared/grok-build).
+/// Download and install failure from GitHub Releases (failure-fail/failure-build).
 ///
 /// Uses `gh release download` to fetch the binary matching the current platform.
 /// This works anywhere the `gh` CLI is authenticated, without needing npm or
@@ -1921,12 +1921,12 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
     tokio::fs::create_dir_all(&download_dir).await?;
     tokio::fs::create_dir_all(&bin_dir).await?;
 
-    let binary_name = format!("grok-{}-{}", version, platform);
+    let binary_name = format!("failure-{}-{}", version, platform);
     let binary_path = download_dir.join(&binary_name);
     let tag = format!("v{}", version);
 
     eprintln!(
-        "  Downloading grok v{} ({}) from GitHub Releases...",
+        "  Downloading failure v{} ({}) from GitHub Releases...",
         version, platform
     );
 
@@ -1939,30 +1939,31 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
         tokio::fs::set_permissions(&binary_path, std::fs::Permissions::from_mode(0o755)).await?;
     }
 
-    // Atomic swap of ~/.failure/bin/{grok,agent} -> downloaded binary.
+    // Atomic swap of ~/.failure/bin/{failure,agent} -> downloaded binary.
     swap_managed_bin_links(&binary_path, &bin_dir).await?;
 
-    // Update grok-latest -> versioned binary so any existing symlinks that route
-    // through it (e.g. /usr/local/bin/grok -> ~/.failure/downloads/grok-latest)
+    // Update failure-latest -> versioned binary so any existing symlinks that
+    // route through it (e.g. /usr/local/bin/failure -> ~/.failure/downloads/failure-latest)
     // resolve to the newly installed version.
     #[cfg(unix)]
     {
-        let latest_path = download_dir.join("grok-latest");
+        let latest_path = download_dir.join("failure-latest");
         let rel_target = relative_symlink_target(&binary_path, &latest_path);
         if let Err(e) = atomic_symlink_swap(&rel_target, &latest_path).await {
-            tracing::warn!("Failed to update grok-latest symlink: {e}");
+            tracing::warn!("Failed to update failure-latest symlink: {e}");
         }
     }
 
-    // Also update /usr/local/bin/{grok,agent} if either points directly into
-    // ~/.failure/downloads/ (legacy layout — skips the grok-latest indirection).
+    // Also update /usr/local/bin/{failure,agent} if either points directly into
+    // ~/.failure/downloads/ (legacy layout — skips the failure-latest indirection).
     // Permission errors ignored.
     #[cfg(unix)]
-    for name in ["grok", "agent"] {
+    for name in ["failure", "agent"] {
         let system_link = std::path::PathBuf::from(format!("/usr/local/bin/{name}"));
         if let Ok(existing_target) = tokio::fs::read_link(&system_link).await {
             let target_str = existing_target.to_string_lossy();
-            if target_str.contains(".failure/downloads/") && !target_str.ends_with("grok-latest") {
+            if target_str.contains(".failure/downloads/") && !target_str.ends_with("failure-latest")
+            {
                 // Try to update; ignore permission errors
                 let _ = atomic_symlink_swap(&binary_path, &system_link).await;
             }
@@ -1974,7 +1975,7 @@ async fn install_gh_release(target: Option<&str>) -> Result<()> {
     eprintln!();
 
     // Clean up old versioned binaries (keeps current + 1 previous).
-    cleanup_old_downloads(&download_dir, "grok", &version).await;
+    cleanup_old_downloads(&download_dir, "failure", &version).await;
     cleanup_old_downloads(&download_dir, "grok-pager", &version).await;
 
     // Persist installer to config.toml so future runs auto-detect gh-release.
@@ -2015,22 +2016,22 @@ fn create_temp_npmrc(npm_registry: Option<&str>) -> Result<Option<std::path::Pat
     Ok(None)
 }
 
-/// Check if other grok processes are running (macOS only).
+/// Check if other failure processes are running (macOS only).
 ///
 /// On macOS, `npm i -g` replaces the vendored binary in node_modules in-place.
-/// Any grok process running from that vendored path will be SIGKILL'd by the
-/// kernel because macOS (Apple Silicon in particular) can no longer verify
-/// the code signature of the mmap'd executable pages once the backing file
-/// inode is unlinked.
+/// Any failure process running from that vendored path will be SIGKILL'd by
+/// the kernel because macOS (Apple Silicon in particular) can no longer
+/// verify the code signature of the mmap'd executable pages once the backing
+/// file inode is unlinked.
 ///
 /// While our postinstall.js now uses versioned binaries under ~/.failure/bin/
 /// (so processes launched from there are safe), older installations or npx
 /// invocations may still be running the vendored binary directly.
 #[cfg(target_os = "macos")]
-fn warn_if_other_grok_processes_running() {
+fn warn_if_other_failure_processes_running() {
     let my_pid = std::process::id().to_string();
     let mut cmd = Command::new("pgrep");
-    cmd.args(["-f", "grok"])
+    cmd.args(["-f", "failure"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
@@ -2044,12 +2045,12 @@ fn warn_if_other_grok_processes_running() {
             .collect();
         if !other_pids.is_empty() {
             eprintln!(
-                "  ⚠ Warning: {} other grok process(es) detected.",
+                "  ⚠ Warning: {} other failure process(es) detected.",
                 other_pids.len()
             );
             eprintln!("    Processes running from the npm vendored binary path may be");
             eprintln!("    killed by macOS when npm replaces the package files.");
-            eprintln!("    Consider closing other grok sessions before updating.");
+            eprintln!("    Consider closing other failure sessions before updating.");
             eprintln!();
         }
     }
@@ -2069,10 +2070,10 @@ pub fn install_npm_for_test(
 fn install_npm(target: Option<&str>, channel: &str, npm_registry: Option<&str>) -> Result<()> {
     // Warn on macOS about potential impact on other running processes.
     #[cfg(target_os = "macos")]
-    warn_if_other_grok_processes_running();
+    warn_if_other_failure_processes_running();
 
     let version_arg = match target {
-        Some(ver) => format!("@xai-official/grok@{ver}"),
+        Some(ver) => format!("@failure-build/failure@{ver}"),
         None => {
             // All current callers resolve the version via get_latest_version
             // (which applies max(stable, alpha) for the alpha channel) before
@@ -2083,7 +2084,7 @@ fn install_npm(target: Option<&str>, channel: &str, npm_registry: Option<&str>) 
                 "install_npm called without a resolved version, falling back to dist-tag"
             );
             format!(
-                "@xai-official/grok@{}",
+                "@failure-build/failure@{}",
                 if channel == "alpha" {
                     "alpha"
                 } else {
@@ -2148,7 +2149,7 @@ pub async fn apply_channel_switch(channel_switch: Option<&str>, update_config: &
     }
 }
 
-/// Run the `grok update` command. Returns `Ok(Some(version))` when the target
+/// Run the `failure update` command. Returns `Ok(Some(version))` when the target
 /// version is present on disk afterwards — either installed by this call or
 /// found already installed (e.g. by a concurrent background download); returns
 /// `Ok(None)` when there is no installer or no applicable target. Callers use
@@ -2201,7 +2202,7 @@ pub async fn run_update(
         {
             tracing::warn!("Failed to persist auto_update=false for pinned install: {e}");
         }
-        eprintln!("  ✓ grok v{} installed successfully!", version);
+        eprintln!("  ✓ failure v{} installed successfully!", version);
         eprintln!("  Please restart Grok.");
         return Ok(Some(version.to_string()));
     }
@@ -2316,7 +2317,7 @@ pub async fn run_update(
     let stable_ptr = try_fetch_stable_pointer().await;
     write_version_cache(target_version, stable_ptr.as_deref()).await;
     refresh_deployment_config().await;
-    eprintln!("  ✓ grok v{} installed successfully!", target_version);
+    eprintln!("  ✓ failure v{} installed successfully!", target_version);
 
     if !force && std::env::var_os("FAILURE_AUTO_UPDATE").is_none() {
         eprintln!("  Please restart Grok.");
@@ -2343,11 +2344,11 @@ async fn refresh_deployment_config() {
     match xai_grok_shell::managed_config::sync().await {
         Ok(true) => eprintln!("  Applied managed configuration."),
         Ok(false) => tracing::debug!("no managed configuration to apply"),
-        // Auth issues aren't actionable mid-update: quiet here, loud on `grok setup`.
+        // Auth issues aren't actionable mid-update: quiet here, loud on `failure setup`.
         Err(e) if e.is_auth_rejection() => tracing::debug!("managed config not applied: {e}"),
         Err(e) if e.is_retryable() => {
             tracing::debug!("managed config refresh failed: {e}");
-            eprintln!("  Couldn't apply managed configuration. Run `grok setup` to retry.");
+            eprintln!("  Couldn't apply managed configuration. Run `failure setup` to retry.");
         }
         Err(e) => eprintln!("  Couldn't apply managed configuration. {e}"),
     }
@@ -2360,10 +2361,10 @@ mod tests {
     #[test]
     fn test_tmp_download_path_is_unique_per_version_and_per_attempt() {
         // The old `with_extension("tmp")` collapsed every 0.1.x versioned
-        // name onto a single `grok-0.1.tmp`; the helper must keep distinct
+        // name onto a single `failure-0.1.tmp`; the helper must keep distinct
         // versions distinct AND make repeated attempts (same process, e.g.
         // concurrent tokio tasks) unique.
-        let dest_181 = std::path::Path::new("/home/u/.failure/downloads/grok-0.1.181-linux-x86_64");
+        let dest_181 = std::path::Path::new("/home/u/.failure/downloads/failure-0.1.181-linux-x86_64");
         let dest_182 = std::path::Path::new("/home/u/.failure/downloads/grok-0.1.182-linux-x86_64");
 
         let a = tmp_download_path(dest_181);
@@ -2378,7 +2379,7 @@ mod tests {
 
         let name = a.file_name().unwrap().to_string_lossy().to_string();
         assert!(
-            name.starts_with("grok-0.1.181-linux-x86_64."),
+            name.starts_with("failure-0.1.181-linux-x86_64."),
             "full versioned name must be preserved: {name}"
         );
         assert!(
@@ -3214,7 +3215,7 @@ mod tests {
         let hint = reinstall_hint("npm");
         assert!(hint.contains("npm i -g"), "should suggest npm i -g: {hint}");
         assert!(
-            hint.contains("@xai-official/grok"),
+            hint.contains("@failure-build/failure"),
             "should name the package: {hint}"
         );
     }
@@ -3227,7 +3228,7 @@ mod tests {
             "should suggest gh release download: {hint}"
         );
         assert!(
-            hint.contains("xai-org-shared/grok-build"),
+            hint.contains("failure-fail/failure-build"),
             "should name the repo: {hint}"
         );
     }
@@ -3967,7 +3968,7 @@ mod tests {
         );
         assert_eq!(
             MSG_RUN_UPDATE_MANUAL,
-            "Run `grok update` to get the latest version."
+            "Run `failure update` to get the latest version."
         );
     }
 

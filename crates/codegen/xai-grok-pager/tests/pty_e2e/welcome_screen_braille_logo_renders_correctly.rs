@@ -35,10 +35,10 @@ async fn welcome_screen_braille_logo_renders_correctly() {
     // byte characters each (e.g. Cyrillic). Check for a few that only
     // appear in the logo — not in any ASCII menu label.
     //
-    // From logo07.txt line 2: ⣠⣾⠿⠛
+    // From logo07.txt (the "F" monogram): rows of ⣤ and ⣿.
     assert!(
-        screen.contains('⣾'),
-        "Braille character ⣾ (U+28FE) not found in screen — \
+        screen.contains('⣤'),
+        "Braille character ⣤ (U+28E4) not found in screen — \
          logo may be garbled by code-page misinterpretation.\n\
          Screen contents:\n{screen}"
     );
