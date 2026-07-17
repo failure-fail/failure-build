@@ -29,9 +29,6 @@ function readLocalVersion() {
     try { return require('../package.json').version; } catch { return undefined; }
 }
 
-// Resolve the per-platform sibling package's directory. Returns null if the
-// matching optional dependency wasn't installed (unsupported platform, or
-// npm refused to install optionalDependencies).
 function resolvePlatformPackageDir() {
     const platformPkg = `@failure-build/failure-${process.platform}-${process.arch}`;
     try {
@@ -41,7 +38,6 @@ function resolvePlatformPackageDir() {
     }
 }
 
-// Decompress a brotli-compressed binary to a sibling path. Atomic via tmp+rename.
 function decompressBrotli(brPath, outPath) {
     const compressed = fs.readFileSync(brPath);
     const decompressed = zlib.brotliDecompressSync(compressed);
@@ -51,8 +47,6 @@ function decompressBrotli(brPath, outPath) {
     try { fs.renameSync(tmp, outPath); } catch {}
 }
 
-// Bootstrap the canonical versioned-symlink layout from a source binary.
-// Returns the canonical path on success, or the source path on failure.
 function bootstrapCanonical(sourceBinPath, version) {
     try {
         fs.mkdirSync(CANONICAL_DIR, { recursive: true });
@@ -105,12 +99,8 @@ function resolveBinary() {
 
     const rawPath = path.join(platformDir, 'bin', BIN_NAME);
     const brPath = rawPath + '.br';
-
-    // Decompress on first use if needed (atomic via tmp+rename).
-    if (!fs.existsSync(rawPath)) {
-        if (fs.existsSync(brPath)) {
-            decompressBrotli(brPath, rawPath);
-        }
+    if (!fs.existsSync(rawPath) && fs.existsSync(brPath)) {
+        decompressBrotli(brPath, rawPath);
     }
     if (!fs.existsSync(rawPath)) {
         console.error(`${pkgName}: missing binary at ${rawPath}`);
@@ -118,18 +108,13 @@ function resolveBinary() {
     }
 
     const version = readLocalVersion();
-    if (version) {
-        return bootstrapCanonical(rawPath, version);
-    }
-    return rawPath;
+    return version ? bootstrapCanonical(rawPath, version) : rawPath;
 }
 
 function shouldStartMcp() {
     if (process.env.FAILURE_MCP_CHILD === '1') return false;
     if (process.env.FAILURE_MCP_ENABLED === '0') return false;
 
-    // Utility commands should remain fast and side-effect free. Interactive,
-    // headless, serve, and normal no-subcommand launches expose MCP.
     const first = process.argv[2];
     const skip = new Set([
         'completions', 'export', 'inspect', 'login', 'logout', 'mcp', 'memory',
@@ -139,14 +124,17 @@ function shouldStartMcp() {
     return !first || !skip.has(first);
 }
 
-function startMcpBridge(execPath) {
+function startMcpBridge() {
     if (!shouldStartMcp()) return null;
     const script = path.join(__dirname, 'mcp-server.js');
     if (!fs.existsSync(script)) return null;
 
-    const child = spawn(process.execPath, [script, '--failure-bin', execPath], {
+    // Point the bridge back at this launcher, not directly at the native binary.
+    // FAILURE_MCP_CHILD prevents recursion, while keeping package resolution and
+    // command compatibility centralized in one place.
+    const child = spawn(process.execPath, [script, '--failure-bin', __filename], {
         stdio: ['ignore', 'ignore', 'inherit'],
-        env: { ...process.env, FAILURE_BIN: execPath },
+        env: { ...process.env, FAILURE_BIN: __filename },
         windowsHide: true,
     });
     child.on('error', (error) => {
@@ -155,10 +143,26 @@ function startMcpBridge(execPath) {
     return child;
 }
 
+function forwardedArgs() {
+    const args = process.argv.slice(2);
+    // The MCP bridge historically requested a JSON session listing. The native
+    // command now requires an explicit `list` subcommand and prints stable text.
+    // Translate the compatibility form here so older bridge builds still work.
+    if (
+        process.env.FAILURE_MCP_CHILD === '1'
+        && args.length === 2
+        && args[0] === 'sessions'
+        && args[1] === '--json'
+    ) {
+        return ['sessions', 'list'];
+    }
+    return args;
+}
+
 const execPath = resolveBinary();
-const mcp = startMcpBridge(execPath);
+const mcp = startMcpBridge();
 const childEnv = { ...process.env, FAILURE_MANAGED_BY_NPM: '1' };
-const child = spawn(execPath, process.argv.slice(2), { stdio: 'inherit', env: childEnv });
+const child = spawn(execPath, forwardedArgs(), { stdio: 'inherit', env: childEnv });
 
 function stopMcp() {
     if (!mcp || mcp.killed) return;
