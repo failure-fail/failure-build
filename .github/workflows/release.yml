@@ -97,8 +97,14 @@ jobs:
         # cross-compiles via the NDK toolchain; output lands under
         # target/aarch64-linux-android/release/, not the native target/release/
         # that the other legs use. API level 24 matches Termux's own minimum.
-        env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        #
+        # No ANDROID_NDK_HOME override here: ubuntu-latest already has
+        # ANDROID_NDK_ROOT set correctly in the real process environment, and
+        # cargo-ndk auto-detects it. `${{ env.X }}` only reads GitHub Actions'
+        # own env context (workflow-defined `env:` blocks), not OS-level
+        # runner env vars — referencing an unset one there yields an empty
+        # string, which then incorrectly overrides the good value instead of
+        # leaving it alone.
         run: cargo ndk --target aarch64-linux-android --platform 24 -- build --release -p xai-grok-pager-bin
 
       - name: Stage artifact (Unix)
