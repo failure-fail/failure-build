@@ -44,6 +44,32 @@ async function apiRequest(config, pathname, options = {}) {
   return body?.result ?? body;
 }
 
+async function discoverAccounts(apiToken) {
+  const result = await apiRequest({ apiToken }, '/accounts?per_page=50');
+  return Array.isArray(result) ? result : [];
+}
+
+async function chooseAccount(rl, apiToken, existingAccountId) {
+  if (process.env.CLOUDFLARE_ACCOUNT_ID) return process.env.CLOUDFLARE_ACCOUNT_ID;
+
+  const accounts = await discoverAccounts(apiToken);
+  if (!accounts.length) {
+    if (existingAccountId) return existingAccountId;
+    throw new Error('The Cloudflare token cannot access any accounts. Check its account scope and permissions.');
+  }
+  if (accounts.length === 1) return accounts[0].id;
+
+  process.stdout.write('Cloudflare accounts available to this token:\n');
+  accounts.forEach((account, index) => {
+    process.stdout.write(`  ${index + 1}. ${account.name || account.id} (${account.id})\n`);
+  });
+  const existingIndex = Math.max(0, accounts.findIndex((account) => account.id === existingAccountId));
+  const answer = await ask(rl, 'Choose account number', String(existingIndex + 1));
+  const index = Number(answer) - 1;
+  if (!Number.isInteger(index) || !accounts[index]) throw new Error('Invalid Cloudflare account selection.');
+  return accounts[index].id;
+}
+
 async function validateConfig(config) {
   if (!config?.apiToken || !config?.accountId) throw new Error('Cloudflare API token and account ID are required.');
   const result = await apiRequest(config, `/accounts/${encodeURIComponent(config.accountId)}/workers/subdomain`);
@@ -109,7 +135,8 @@ async function configureInteractive() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
     const apiToken = process.env.CLOUDFLARE_API_TOKEN || await ask(rl, 'Cloudflare API token', existing.apiToken || '');
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || await ask(rl, 'Cloudflare account ID', existing.accountId || '');
+    if (!apiToken) throw new Error('Cloudflare API token is required.');
+    const accountId = await chooseAccount(rl, apiToken, existing.accountId);
     const workerName = await ask(rl, 'Worker name', existing.workerName || 'failure-mcp');
     const config = { apiToken, accountId, workerName, enabled: true };
     const subdomain = await validateConfig(config);
@@ -148,4 +175,11 @@ if (require.main === module) {
   });
 }
 
-module.exports = { CONFIG_PATH, readConfig, writeConfig, validateConfig, deployProxyWorker };
+module.exports = {
+  CONFIG_PATH,
+  readConfig,
+  writeConfig,
+  discoverAccounts,
+  validateConfig,
+  deployProxyWorker,
+};
