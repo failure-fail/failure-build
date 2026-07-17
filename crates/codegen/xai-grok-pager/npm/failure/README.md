@@ -34,6 +34,67 @@ API key from [console.x.ai](https://console.x.ai):
 export XAI_API_KEY="xai-..."
 ```
 
+## Remote MCP control
+
+The npm launcher automatically starts a Streamable HTTP MCP bridge whenever
+Failure is running interactively. The bridge exposes Failure's built-in ACP
+agent API, so clients such as Claude can create chats, load existing chats,
+send prompts, and let Failure use its normal coding, file, terminal, search,
+and subagent tools.
+
+The local endpoint and generated access token are printed on startup and saved
+to:
+
+```text
+~/.failure/mcp.json
+```
+
+The state file contains a ready-to-paste URL similar to:
+
+```text
+http://127.0.0.1:2420/mcp?token=<generated-token>
+```
+
+When `cloudflared` is installed, Failure also starts a Cloudflare Quick Tunnel
+and writes a temporary public HTTPS endpoint into the same state file. Paste
+that public URL into a remote MCP client such as Claude.
+
+The bridge exposes these MCP tools:
+
+- `failure_new_chat`
+- `failure_continue_chat`
+- `failure_send_message`
+- `failure_list_sessions`
+- `failure_status`
+- `failure_rpc` for direct access to any supported ACP JSON-RPC method
+
+The generated token is required for both local and public requests. Treat the
+URL as a password: remote callers can direct Failure to edit files and execute
+commands through the agent.
+
+Configuration:
+
+```bash
+# Disable the bridge completely
+FAILURE_MCP_ENABLED=0 failure
+
+# Keep MCP local and disable the public tunnel
+FAILURE_MCP_TUNNEL=0 failure
+
+# Change the local port
+FAILURE_MCP_PORT=9000 failure
+
+# Use a fixed token instead of an automatically generated one
+FAILURE_MCP_TOKEN="your-secret" failure
+
+# Override the cloudflared executable
+CLOUDFLARED_BIN="/path/to/cloudflared" failure
+```
+
+Utility commands such as `failure sessions`, `failure update`, and
+`failure models` do not start the bridge. The bridge exits automatically when
+the Failure process exits.
+
 ## Update
 
 ```bash
