@@ -24,11 +24,13 @@ url = { workspace = true }
 
 [features]
 # `audio` = "microphone capture is compiled in". It's enabled on every OS for
-# production builds: macOS/Windows link `cpal`; Linux shells out to a system
-# recorder (see `src/audio/capture_linux.rs`) and links no audio library, so
-# `cpal` -> `alsa-sys` never reaches the fully-static musl release binary.
-# `cpal` is target-gated to non-Linux below, so enabling `audio` on Linux pulls
-# no extra dependency — it only compiles the subprocess backend.
+# production builds: macOS/Windows link `cpal`; Linux and Android shell out to
+# a system recorder (see `src/audio/capture_linux.rs`) and link no audio
+# library, so `cpal` -> `alsa-sys`/`oboe` never reaches the fully-static musl
+# release binary (Linux) or hits the NDK's static-libc++ linker issues
+# (Android). `cpal` is target-gated to non-Linux/non-Android below, so
+# enabling `audio` there pulls no extra dependency — it only compiles the
+# subprocess backend.
 default = ["audio"]
 # Alternate default feature set that opts out of audio. CI builds the voice
 # crate WITHOUT `audio` so the pager binary has no mic capture in the test
@@ -37,10 +39,13 @@ default = ["audio"]
 default-bazel = []
 audio = ["dep:cpal"]
 
-# cpal is only used by the non-Linux capture backend. Gating it to non-Linux
-# keeps `alsa-sys` (a NEEDED `libasound.so.2`) out of the static musl build; on
-# Linux the `audio` feature compiles the subprocess recorder backend instead.
-[target.'cfg(not(target_os = "linux"))'.dependencies.cpal]
+# cpal is only used by the macOS/Windows capture backend. Gating it away from
+# Linux keeps `alsa-sys` (a NEEDED `libasound.so.2`) out of the static musl
+# build; gating it away from Android avoids `oboe` (a C++ dependency — the
+# NDK's static libc++ has known missing-symbol linker issues, see the
+# `xai-grok-voice::audio` module doc comment). Both platforms compile the
+# subprocess recorder backend instead.
+[target.'cfg(not(any(target_os = "linux", target_os = "android")))'.dependencies.cpal]
 version = "0.15"
 optional = true
 

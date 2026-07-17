@@ -92,6 +92,19 @@ jobs:
           RUSTFLAGS: ${{ runner.os == 'Windows' && '-C link-arg=/DEBUG:LongSymbolTruncate' || '' }}
         run: cargo build --release -p xai-grok-pager-bin
 
+      - name: Work around NDK libgcc removal
+        if: matrix.android
+        # NDK r23+ dropped libgcc.a (replaced by libunwind/compiler-rt), but
+        # rustc's aarch64-linux-android target spec still emits `-lgcc` at the
+        # final link step, and ld.lld (unlike bfd) doesn't shim it — see
+        # rust-lang/rust#85806. Standard workaround: a fake libgcc.a that's
+        # just a linker script redirecting to `-lunwind`, on the search path.
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-libgcc-workaround"
+          echo "INPUT(-lunwind)" > "$RUNNER_TEMP/android-libgcc-workaround/libgcc.a"
+          echo "RUSTFLAGS=-L$RUNNER_TEMP/android-libgcc-workaround" >> "$GITHUB_ENV"
+
       - name: Build release binary (Android)
         if: matrix.android
         # cross-compiles via the NDK toolchain; output lands under
