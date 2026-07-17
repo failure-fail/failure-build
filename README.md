@@ -62,6 +62,10 @@ Intel Mac runners — so Intel Mac users should fall back to
 [README](crates/codegen/xai-grok-pager/npm/failure/README.md#android-via-termux)
 for the install steps.
 
+For copy-pasteable install commands for every platform (including the full
+Android/Termux walkthrough and custom-provider setup), see
+[`INSTALL.md`](INSTALL.md).
+
 ## Building from source
 
 Requirements:
