@@ -1,0 +1,38 @@
+name: Failure MCP smoke
+
+on:
+  push:
+    branches:
+      - claude/grok-rebrand-reskin-0jgqqy
+    paths:
+      - "crates/codegen/xai-grok-pager/npm/failure/bin/failure"
+      - "crates/codegen/xai-grok-pager/npm/failure/bin/mcp-server.js"
+      - "crates/codegen/xai-grok-pager/npm/failure/scripts/test-mcp-server.js"
+      - "crates/codegen/xai-grok-pager/npm/failure/package.json"
+      - ".github/workflows/failure-mcp-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: crates/codegen/xai-grok-pager/npm/failure
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check launcher syntax
+        run: node --check bin/failure
+      - name: Check MCP bridge syntax
+        run: node --check bin/mcp-server.js
+      - name: Run MCP protocol smoke test
+        run: node scripts/test-mcp-server.js
