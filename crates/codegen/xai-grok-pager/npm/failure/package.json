@@ -20,7 +20,7 @@
     ],
     "scripts": {
         "postinstall": "node bin/postinstall.js",
-        "test:mcp": "node --check bin/mcp-server.js && node scripts/test-mcp-server.js"
+        "test:mcp": "node --check bin/failure && node --check bin/mcp-server.js && node --check bin/cloudflare-worker.js && node --check bin/cloudflare-worker-daemon.js && node scripts/test-mcp-server.js && node scripts/test-cloudflare-worker.js"
     },
     "publishConfig": {
         "access": "public"
