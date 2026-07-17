@@ -1,0 +1,19 @@
+{
+    "name": "@failure-build/failure-darwin-x64",
+    "version": "0.2.0-dev",
+    "description": "darwin-x64 binary for @failure-build/failure. Do not install directly; install @failure-build/failure instead.",
+    "license": "Apache-2.0",
+    "files": [
+        "bin/",
+        "THIRD_PARTY_NOTICES.md"
+    ],
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "publishConfig": {
+        "access": "public"
+    }
+}

@@ -1,0 +1,4 @@
+bin/*.br
+bin/failure
+bin/failure.exe
+THIRD_PARTY_NOTICES.md

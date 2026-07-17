@@ -1,6 +1,6 @@
 # Configuration
 
-Grok reads configuration from local config files, environment variables, and
+Failure reads configuration from local config files, environment variables, and
 CLI flags. This document covers the common options.
 
 ---
@@ -10,8 +10,8 @@ CLI flags. This document covers the common options.
 Configuration is resolved in this order (highest priority first):
 
 1. **CLI flags** (e.g., `--yolo`, `--model`, `--sandbox`)
-2. **Environment variables** (e.g., `XAI_API_KEY`, `GROK_MEMORY`)
-3. **config.toml** (`~/.grok/config.toml`)
+2. **Environment variables** (e.g., `XAI_API_KEY`, `FAILURE_MEMORY`)
+3. **config.toml** (`~/.failure/config.toml`)
 4. **Managed / requirements config** (local files your org may deploy, e.g.
    `managed_config.toml` / `requirements.toml`)
 5. **Built-in defaults**
@@ -20,9 +20,9 @@ Configuration is resolved in this order (highest priority first):
 
 ## config.toml (Main Configuration)
 
-Location: `~/.grok/config.toml`
+Location: `~/.failure/config.toml`
 
-If the file does not exist, Grok uses built-in defaults. Specify only the values you want to override.
+If the file does not exist, Failure uses built-in defaults. Specify only the values you want to override.
 
 ### General Settings
 
@@ -98,7 +98,7 @@ simple_mode = false
 ```
 
 You can also toggle this setting from the settings pane (`/settings` →
-**Disable vim input mode**); Grok writes your choice to `[ui] simple_mode` in
+**Disable vim input mode**); Failure writes your choice to `[ui] simple_mode` in
 `config.toml`.
 
 `simple_mode` and `vim_mode` are independent: `simple_mode` changes the prompt
@@ -139,7 +139,7 @@ that is `always_allow_all_sessions`. Note that the per-command "Always allow"
 rows appear only when `[ui] remember_tool_approvals = true` (default: false).
 See [22-permissions-and-safety.md](22-permissions-and-safety.md).
 
-The setting can also be overridden with the `GROK_DEFAULT_SELECTED_PERMISSION`
+The setting can also be overridden with the `FAILURE_DEFAULT_SELECTED_PERMISSION`
 environment variable — handy for headless / agent test runs that shouldn't
 mutate `config.toml`. Precedence: env var → `config.toml` →
 `always_allow_all_sessions` (the default).
@@ -155,8 +155,8 @@ active in the **scrollback** pane. It does not affect the input prompt.
 | `true` | All vim-style scrollback bindings are active, exactly as listed in [Keyboard Shortcuts](03-keyboard-shortcuts.md). |
 
 Toggle `vim_mode` at runtime with `/vim-mode`, or from the settings pane
-(`/settings` → **Vim scrollback navigation**). Grok writes the change to
-`[ui] vim_mode` in `~/.grok/config.toml` immediately and applies it to every
+(`/settings` → **Vim scrollback navigation**). Failure writes the change to
+`[ui] vim_mode` in `~/.failure/config.toml` immediately and applies it to every
 future pager session — including new agents and subagents started in the same
 process. There is no separate per-session override; whatever is in
 `config.toml` is the source of truth on next launch.
@@ -167,7 +167,7 @@ navigation, while `simple_mode` controls editing in the prompt.
 #### Screen Mode
 
 The `screen_mode` setting under `[ui]` is the **default render mode** for plain
-`grok` launches. Configure it from `/settings` → **Default screen mode**
+`failure` launches. Configure it from `/settings` → **Default screen mode**
 (restart required), or edit `config.toml` by hand. Both choices write
 `config.toml`. CLI flags (`--minimal` / `--fullscreen`) and slash commands
 (`/minimal` / `/fullscreen`) are session-scoped and do **not** write this key —
@@ -207,8 +207,8 @@ invert_scroll = false
 
 Each setting also has an environment-variable override, applied on first load
 only — handy for headless / test runs that shouldn't mutate `config.toml`:
-`GROK_SCROLL_SPEED`, `GROK_SCROLL_MODE`, `GROK_INVERT_SCROLL`
-(`1`/`true`/`0`/`false`), and `GROK_SCROLL_LINES`. Precedence: env var →
+`FAILURE_SCROLL_SPEED`, `FAILURE_SCROLL_MODE`, `FAILURE_INVERT_SCROLL`
+(`1`/`true`/`0`/`false`), and `FAILURE_SCROLL_LINES`. Precedence: env var →
 `config.toml` → default. Unrecognized values fall back to the default, and
 out-of-range numbers clamp to the allowed range.
 
@@ -230,8 +230,8 @@ allowed_domains = ["docs.rs", "x.ai"]           # override the built-in allowlis
 
 `[toolset.ask_user_question]` is honored across **requirements.toml**, **managed
 config**, and **user `config.toml`**. Precedence: requirements → env
-(`GROK_ASK_USER_QUESTION_TIMEOUT_ENABLED` /
-`GROK_ASK_USER_QUESTION_TIMEOUT_SECS`) → user config → managed →
+(`FAILURE_ASK_USER_QUESTION_TIMEOUT_ENABLED` /
+`FAILURE_ASK_USER_QUESTION_TIMEOUT_SECS`) → user config → managed →
 defaults. Set `timeout_enabled = false` in your user config to disable the
 automatic questionnaire timeout for yourself; `timeout_secs` must be a
 positive integer. `timeout_enabled` can also be toggled from the settings
@@ -278,7 +278,7 @@ Credential resolution: `api_key` > `env_key` > signed-in session token > `XAI_AP
 Override built-in models by using their name as the section key:
 
 ```toml
-[model.grok-build]
+[model.failure-build]
 api_key = "my-api-key"               # only override the fields you need
 ```
 
@@ -305,13 +305,13 @@ url = "https://mcp.example.com/api/mcp"  # HTTP/SSE transport
 headers = { "x-mcp-session-id" = "{{session_id}}" }
 ```
 
-MCP servers can also be configured per-project in `.grok/config.toml`. Project-scoped config contributes `[mcp_servers]`, `[plugins]`, and `[permission]` rules; other sections load only from `~/.grok/config.toml`.
+MCP servers can also be configured per-project in `.failure/config.toml`. Project-scoped config contributes `[mcp_servers]`, `[plugins]`, and `[permission]` rules; other sections load only from `~/.failure/config.toml`.
 
-Priority for `[mcp_servers]` and `[plugins]`: `.grok/config.toml` (current dir) > `<repo-root>/.grok/config.toml` > `~/.grok/config.toml`. `[permission]` rules are not overridden by priority; they merge across all files with `deny` > `ask` > `allow` (see [22-permissions-and-safety.md](22-permissions-and-safety.md)).
+Priority for `[mcp_servers]` and `[plugins]`: `.failure/config.toml` (current dir) > `<repo-root>/.failure/config.toml` > `~/.failure/config.toml`. `[permission]` rules are not overridden by priority; they merge across all files with `deny` > `ask` > `allow` (see [22-permissions-and-safety.md](22-permissions-and-safety.md)).
 
 ### Memory
 
-Persist knowledge across sessions (requires `--experimental-memory` or `GROK_MEMORY=1`).
+Persist knowledge across sessions (requires `--experimental-memory` or `FAILURE_MEMORY=1`).
 
 ```toml
 [memory]
@@ -394,7 +394,7 @@ Each cell can be toggled via environment variable or `config.toml`. See the
 environment-variables reference for the env var names. Resolution order:
 env var > config.toml > default (on).
 
-`grok inspect` reports cells that still need session-start resolution as
+`failure inspect` reports cells that still need session-start resolution as
 `?` until a value is available; cells with an explicit env or TOML value
 use that value. Affected discovery entries report
 `compatibilityStatus: "unresolved"` in JSON and `[compat unresolved]` in
@@ -410,9 +410,9 @@ disabled = ["user/a1b2c3d4/noisy-plugin"]
 
 ### Hints
 
-The `[hints]` table holds small persisted UI preferences — mostly "stop asking me" opt-outs. Grok writes these for you when you pick a "don't ask again" / "reset in config.toml" option in the TUI, but you can edit or remove them by hand. Deleting a key restores the default behavior.
+The `[hints]` table holds small persisted UI preferences — mostly "stop asking me" opt-outs. Failure writes these for you when you pick a "don't ask again" / "reset in config.toml" option in the TUI, but you can edit or remove them by hand. Deleting a key restores the default behavior.
 
-`[hints]` is read from the **effective config merge** (same precedence as other settings): system managed → user `managed_config.toml` → user `config.toml` → user `requirements.toml` → system `requirements.toml`. Higher-priority layers override lower ones. The TUI only **writes** opt-outs to user `~/.grok/config.toml`.
+`[hints]` is read from the **effective config merge** (same precedence as other settings): system managed → user `managed_config.toml` → user `config.toml` → user `requirements.toml` → system `requirements.toml`. Higher-priority layers override lower ones. The TUI only **writes** opt-outs to user `~/.failure/config.toml`.
 
 ```toml
 [hints]
@@ -424,7 +424,7 @@ fork_worktree_mode = "ask"             # /fork worktree prompt: "ask" | "always"
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `project_picker_disabled` | bool | `false` | When `true`, skips the picker that asks you to choose a project directory on the first prompt when Grok is launched from a non-project directory (home, Desktop, Downloads, `/tmp`). Set automatically when you choose **"Don't ask me again"** in that picker. Teams can pin this in `managed_config.toml` or `requirements.toml` via `[hints] project_picker_disabled = true`. |
+| `project_picker_disabled` | bool | `false` | When `true`, skips the picker that asks you to choose a project directory on the first prompt when Failure is launched from a non-project directory (home, Desktop, Downloads, `/tmp`). Set automatically when you choose **"Don't ask me again"** in that picker. Teams can pin this in `managed_config.toml` or `requirements.toml` via `[hints] project_picker_disabled = true`. |
 | `memory_modal_fullscreen` | bool | `false` | Remembers whether the memory modal was last opened fullscreen. |
 | `new_session_worktree_mode` | string | `"never"` | Worktree prompt for `/new`: `ask` shows the popup, `always` creates a worktree, `never` skips it. |
 | `fork_worktree_mode` | string | `"ask"` | Worktree prompt for `/fork`: `ask`, `always`, or `never`. |
@@ -447,7 +447,7 @@ progress_bar = true       # show tab progress bar (OSC 9;4)
 
 [ui.notifications.title]
 enabled = true
-items = ["action-required", "spinner", "activity", "session-name", "grok"]
+items = ["action-required", "spinner", "activity", "session-name", "failure"]
 ```
 
 | Option | Type | Default | Description |
@@ -459,7 +459,7 @@ items = ["action-required", "spinner", "activity", "session-name", "grok"]
 | `sleep_prevention` | bool | `true` | Keep the display awake while the agent is working (macOS/Linux). |
 | `progress_bar` | bool | `true` | Show a progress indicator in the terminal tab (OSC 9;4). |
 | `title.enabled` | bool | `true` | Set the terminal title to reflect agent state. |
-| `title.items` | array | (see above) | Items shown in the title bar. Options: `action-required`, `spinner`, `activity`, `session-name`, `cwd`, `model`, `turn-timer`, `grok`. |
+| `title.items` | array | (see above) | Items shown in the title bar. Options: `action-required`, `spinner`, `activity`, `session-name`, `cwd`, `model`, `turn-timer`, `failure`. |
 
 #### Terminal Support Matrix
 
@@ -474,28 +474,28 @@ items = ["action-required", "spinner", "activity", "session-name", "grok"]
 | VS Code | BEL | Yes | No |
 | Apple Terminal | BEL | No | No |
 | VTE (GNOME Terminal) | OSC 777 | Yes | No |
-| Grok Desktop | None (native) | N/A | N/A |
+| Failure Desktop | None (native) | N/A | N/A |
 | Unknown | BEL | No | No |
 
-When `method = "auto"`, Grok detects the terminal brand and selects the best
+When `method = "auto"`, Failure detects the terminal brand and selects the best
 protocol automatically. Set `method` explicitly to override auto-detection.
 
 #### Notification Hooks
 
 Run custom commands when events occur. Hooks receive environment variables
-`$GROK_EVENT`, `$GROK_MESSAGE`, and `$GROK_SESSION_ID`.
+`$FAILURE_EVENT`, `$FAILURE_MESSAGE`, and `$FAILURE_SESSION_ID`.
 
 ```toml
 # macOS native notification
 [[ui.notifications.hooks]]
-command = "terminal-notifier -title 'Grok' -message '$GROK_MESSAGE'"
+command = "terminal-notifier -title 'Failure' -message '$FAILURE_MESSAGE'"
 events = ["turn_complete", "approval_required"]
 only_unfocused = true
 timeout_secs = 10
 
 # Push to ntfy server
 [[ui.notifications.hooks]]
-command = "curl -s -d '$GROK_MESSAGE' ntfy.sh/my-grok-alerts"
+command = "curl -s -d '$FAILURE_MESSAGE' ntfy.sh/my-grok-alerts"
 events = ["turn_complete"]
 only_unfocused = true
 timeout_secs = 10
@@ -530,7 +530,7 @@ Then restart tmux. If passthrough is not available (tmux < 3.3), set
 
 **Focus tracking not working:**
 Some terminals do not report focus events. If `condition = "unfocused"` never
-fires, try `condition = "always"` as a fallback. Grok supports focus tracking
+fires, try `condition = "always"` as a fallback. Failure supports focus tracking
 in every detected terminal except Apple Terminal and unrecognized terminals.
 
 **Sleep prevention not taking effect:**
@@ -556,13 +556,13 @@ mixpanel_enabled = false                                  # disable Mixpanel pro
 trace_upload = false                                      # disable session/trace uploads (inherits the telemetry toggle when unset)
 ```
 
-Set these only to point telemetry at your own infrastructure or to turn parts of it off. The built-in endpoint and credentials are managed by Grok; leave them unset to use the defaults.
+Set these only to point telemetry at your own infrastructure or to turn parts of it off. The built-in endpoint and credentials are managed by Failure; leave them unset to use the defaults.
 
 The same `[telemetry]` table also configures the **external OpenTelemetry stream** — an independent opt-in (it does not require the telemetry toggle above) that ships a curated, content-free usage schema to your *own* OTLP collector. Collector auth is supplied via `OTEL_EXPORTER_OTLP_HEADERS` and is never stored on disk. See [Monitoring & Usage](24-monitoring-usage.md) for the full schema, env vars, and privacy model.
 
 ```toml
 [telemetry]
-otel_enabled = true                                       # external OTEL master switch (= GROK_EXTERNAL_OTEL)
+otel_enabled = true                                       # external OTEL master switch (= FAILURE_EXTERNAL_OTEL)
 otel_metrics_exporter = "otlp"                            # otlp | console | none
 otel_logs_exporter = "otlp"                               # otlp | console | none
 otel_endpoint = "https://collector.corp.example:4318"     # OTLP base endpoint
@@ -585,12 +585,12 @@ auth_provider_label = "Acme Corp"
 auth_token_ttl = 3600
 
 [models]
-default = "company-grok"
+default = "company-failure"
 
-[model.company-grok]
+[model.company-failure]
 model = "grok-build"
 base_url = "https://grok-proxy.acme.com/"
-name = "Grok Build Latest (Proxy)"
+name = "Failure Build Latest (Proxy)"
 context_window = 128000
 
 [features]
@@ -601,7 +601,7 @@ telemetry = false
 
 ## pager.toml (Appearance Configuration)
 
-Location: `~/.grok/pager.toml`
+Location: `~/.failure/pager.toml`
 
 Controls the visual appearance and behavior of the TUI. Changes are applied on restart.
 
@@ -731,50 +731,50 @@ Key environment variables. See the README for the complete list.
 | Variable | Description |
 |----------|-------------|
 | `XAI_API_KEY` | API key from console.x.ai |
-| `GROK_AUTH_PROVIDER_COMMAND` | External auth binary path |
-| `GROK_AUTH_PROVIDER_LABEL` | Display name on TUI login screen |
-| `GROK_AUTH_TOKEN_TTL` | Token lifetime in seconds |
-| `GROK_AUTH_EARLY_INVALIDATION_SECS` | Seconds before expiry to refresh (default: 300) |
-| `GROK_OIDC_ISSUER` | OIDC issuer URL |
-| `GROK_OIDC_CLIENT_ID` | OIDC client ID |
+| `FAILURE_AUTH_PROVIDER_COMMAND` | External auth binary path |
+| `FAILURE_AUTH_PROVIDER_LABEL` | Display name on TUI login screen |
+| `FAILURE_AUTH_TOKEN_TTL` | Token lifetime in seconds |
+| `FAILURE_AUTH_EARLY_INVALIDATION_SECS` | Seconds before expiry to refresh (default: 300) |
+| `FAILURE_OIDC_ISSUER` | OIDC issuer URL |
+| `FAILURE_OIDC_CLIENT_ID` | OIDC client ID |
 
 ### Endpoints
 
 | Variable | Description |
 |----------|-------------|
-| `GROK_CLI_CHAT_PROXY_BASE_URL` | Override API proxy base URL |
+| `FAILURE_CLI_CHAT_PROXY_BASE_URL` | Override API proxy base URL |
 
 ### Features
 
 | Variable | Description |
 |----------|-------------|
-| `GROK_MEMORY` | Enable (`1`) or disable (`0`) cross-session memory |
-| `GROK_SUBAGENTS` | Enable (`1`) or disable (`0`) subagents |
-| `GROK_WEB_FETCH` | Enable (`1`) or disable (`0`) the web_fetch tool |
-| `GROK_AGENT` | Custom agent definition path or name |
-| `GROK_SANDBOX` | Sandbox profile (off, workspace, devbox, read-only, strict; or a custom profile name) |
+| `FAILURE_MEMORY` | Enable (`1`) or disable (`0`) cross-session memory |
+| `FAILURE_SUBAGENTS` | Enable (`1`) or disable (`0`) subagents |
+| `FAILURE_WEB_FETCH` | Enable (`1`) or disable (`0`) the web_fetch tool |
+| `FAILURE_AGENT` | Custom agent definition path or name |
+| `FAILURE_SANDBOX` | Sandbox profile (off, workspace, devbox, read-only, strict; or a custom profile name) |
 
 ### Logging
 
 | Variable | Description |
 |----------|-------------|
-| `GROK_LOG_FILE` | Write logs to this file path (the value is used verbatim as the path) |
-| `RUST_LOG` | Log level filter (for example `debug`); controls the `GROK_LOG_FILE` log and headless stderr output |
+| `FAILURE_LOG_FILE` | Write logs to this file path (the value is used verbatim as the path) |
+| `RUST_LOG` | Log level filter (for example `debug`); controls the `FAILURE_LOG_FILE` log and headless stderr output |
 
 ### Paths
 
 | Variable | Description |
 |----------|-------------|
-| `GROK_HOME` | Override config directory (default: `~/.grok`) |
-| `GROK_RESPECT_GITIGNORE` | Force gitignore filtering on (`1`) or off (`0`); overrides `[tools] respect_gitignore` |
+| `FAILURE_HOME` | Override config directory (default: `~/.failure`) |
+| `FAILURE_RESPECT_GITIGNORE` | Force gitignore filtering on (`1`) or off (`0`); overrides `[tools] respect_gitignore` |
 
 ### Telemetry
 
 | Variable | Description |
 |----------|-------------|
-| `GROK_TELEMETRY_ENABLED` | Enable/disable telemetry |
-| `GROK_FEEDBACK_ENABLED` | Enable/disable feedback system |
-| `GROK_DEPLOYMENT_KEY` | Management API key for enterprise |
+| `FAILURE_TELEMETRY_ENABLED` | Enable/disable telemetry |
+| `FAILURE_FEEDBACK_ENABLED` | Enable/disable feedback system |
+| `FAILURE_DEPLOYMENT_KEY` | Management API key for enterprise |
 
 ---
 
@@ -782,37 +782,37 @@ Key environment variables. See the README for the complete list.
 
 | Path | Description |
 |------|-------------|
-| `~/.grok/config.toml` | Main configuration file |
-| `~/.grok/pager.toml` | TUI appearance configuration |
-| `~/.grok/auth.json` | Authentication credentials (auto-managed) |
-| `~/.grok/sessions/` | Persisted sessions (organized by working directory) |
-| `~/.grok/memory/` | Cross-session memory files and index |
-| `~/.grok/skills/` | User-scoped skill definitions |
-| `~/.grok/plugins/` | User-scoped plugins |
-| `~/.grok/agents/` | User-scoped agent definitions |
-| `~/.grok/lsp.json` | LSP server configuration (user-scoped) |
-| `~/.grok/logs/` | Internal log files (for example `unified.jsonl`, MCP server logs) |
-| `.grok/config.toml` | Project-scoped MCP servers, plugins, and permission rules |
-| `.grok/skills/` | Project-scoped skill definitions |
-| `.grok/plugins/` | Project-scoped plugins |
-| `.grok/agents/` | Project-scoped agent definitions |
-| `.grok/hooks/` | Project-scoped hooks |
-| `.grok/lsp.json` | LSP server configuration |
+| `~/.failure/config.toml` | Main configuration file |
+| `~/.failure/pager.toml` | TUI appearance configuration |
+| `~/.failure/auth.json` | Authentication credentials (auto-managed) |
+| `~/.failure/sessions/` | Persisted sessions (organized by working directory) |
+| `~/.failure/memory/` | Cross-session memory files and index |
+| `~/.failure/skills/` | User-scoped skill definitions |
+| `~/.failure/plugins/` | User-scoped plugins |
+| `~/.failure/agents/` | User-scoped agent definitions |
+| `~/.failure/lsp.json` | LSP server configuration (user-scoped) |
+| `~/.failure/logs/` | Internal log files (for example `unified.jsonl`, MCP server logs) |
+| `.failure/config.toml` | Project-scoped MCP servers, plugins, and permission rules |
+| `.failure/skills/` | Project-scoped skill definitions |
+| `.failure/plugins/` | Project-scoped plugins |
+| `.failure/agents/` | Project-scoped agent definitions |
+| `.failure/hooks/` | Project-scoped hooks |
+| `.failure/lsp.json` | LSP server configuration |
 
 ---
 
 ## Project-Scoped Configuration
 
-Some configuration can be set per-project by placing files in `.grok/` within your repository:
+Some configuration can be set per-project by placing files in `.failure/` within your repository:
 
 | File | What it configures |
 |------|--------------------|
-| `.grok/config.toml` | MCP servers, plugins, permission rules, and the `[mcp] max_output_bytes` tool-result cap (other sections load only from `~/.grok/config.toml`) |
-| `.grok/skills/` | Project-specific skills |
-| `.grok/hooks/` | Project-specific lifecycle hooks |
-| `.grok/agents/` | Project-specific agent definitions |
-| `.grok/lsp.json` | LSP server configuration |
-| `.grok/sandbox.toml` | Custom sandbox profiles |
+| `.failure/config.toml` | MCP servers, plugins, permission rules, and the `[mcp] max_output_bytes` tool-result cap (other sections load only from `~/.failure/config.toml`) |
+| `.failure/skills/` | Project-specific skills |
+| `.failure/hooks/` | Project-specific lifecycle hooks |
+| `.failure/agents/` | Project-specific agent definitions |
+| `.failure/lsp.json` | LSP server configuration |
+| `.failure/sandbox.toml` | Custom sandbox profiles |
 | `AGENTS.md` | Project instructions (system prompt) |
 
 Project-scoped MCP servers override global ones with the same name (full replacement, not merge).
@@ -825,14 +825,14 @@ Language servers power passive diagnostics and the optional `lsp` tool (see the 
 
 | Source | Location | Scope |
 |--------|----------|-------|
-| User | `~/.grok/lsp.json` | All projects |
-| Project | `.grok/lsp.json` | Current repository |
+| User | `~/.failure/lsp.json` | All projects |
+| Project | `.failure/lsp.json` | Current repository |
 | Plugin | A trusted plugin's `.lsp.json` file, or an inline `lspServers` block in its `plugin.json` | Wherever the plugin is enabled |
 
 When the same server name is defined by more than one source, it is resolved in this order (highest priority first):
 
-1. **Project** -- `.grok/lsp.json`
-2. **User** -- `~/.grok/lsp.json`
+1. **Project** -- `.failure/lsp.json`
+2. **User** -- `~/.failure/lsp.json`
 3. **Plugins** -- file-based `.lsp.json`, then inline `lspServers`, in plugin load order
 
 Project and user entries replace lower-priority ones with the same name. Plugin entries only add servers whose names are not already defined by a local file, so a local `lsp.json` always wins over a plugin. Plugin LSP servers load only after the plugin is trusted (see [Plugins](09-plugins.md)).

@@ -1,0 +1,41 @@
+{
+    "name": "@failure-build/failure",
+    "version": "0.1.220-alpha.4",
+    "description": "Bring Failure Build into your terminal",
+    "license": "Apache-2.0",
+    "bin": {
+        "failure": "bin/failure"
+    },
+    "files": [
+        "bin/"
+    ],
+    "os": [
+        "darwin",
+        "linux",
+        "win32"
+    ],
+    "cpu": [
+        "arm64",
+        "x64"
+    ],
+    "scripts": {
+        "postinstall": "node bin/postinstall.js"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "engines": {
+        "node": ">=20"
+    },
+    "dependencies": {
+        "@iarna/toml": "^3.0.0"
+    },
+    "optionalDependencies": {
+        "@failure-build/failure-darwin-arm64": "0.1.220-alpha.4",
+        "@failure-build/failure-darwin-x64": "0.1.220-alpha.4",
+        "@failure-build/failure-linux-arm64": "0.1.220-alpha.4",
+        "@failure-build/failure-linux-x64": "0.1.220-alpha.4",
+        "@failure-build/failure-win32-arm64": "0.1.220-alpha.4",
+        "@failure-build/failure-win32-x64": "0.1.220-alpha.4"
+    }
+}

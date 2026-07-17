@@ -130,7 +130,7 @@ fn toggle_vim_mode_propagates_to_open_subagent_views() {
 /// active, so it was a silent no-op and the overview's j/k never
 /// turned on. Turning vim ON also focuses the overview so j/k
 /// navigate immediately; turning it OFF returns focus to the input.
-#[serial_test::serial(GROK_AGENT_DASHBOARD)]
+#[serial_test::serial(FAILURE_AGENT_DASHBOARD)]
 #[test]
 fn toggle_vim_mode_works_on_dashboard_and_focuses_overview() {
     crate::appearance::cache::set_vim_mode(false);
@@ -2716,16 +2716,16 @@ fn dispatch_cycle_mode_refreshes_open_modal_snapshot() {
         "current_value_for must read the refreshed snapshot",
     );
 }
-/// `dispatch(Action::SetTheme("grokday"), &mut app)` emits
+/// `dispatch(Action::SetTheme("failureday"), &mut app)` emits
 /// exactly one `Effect::PersistSetting`, mutates
 /// `app.current_ui.theme`, fires a toast, and toggles AUTO_MODE
 /// off (kind is concrete).
 ///
-/// Note: we persist `grokday` (a non-truecolor theme) here
+/// Note: we persist `failureday` (a non-truecolor theme) here
 /// because `Effect::PersistSetting`'s payload is `&'static str`
 /// from the registry's canonical table — the persisted CANONICAL
 /// is what we're asserting, NOT the live theme cache (which
-/// `clamp_to_terminal` might fold to GrokNight in non-truecolor
+/// `clamp_to_terminal` might fold to FailureNight in non-truecolor
 /// test environments). Persist + canonical contract is the test
 /// invariant; the cache contract is exercised separately by the
 /// `*_applies_when_*` tests.
@@ -2735,8 +2735,8 @@ fn set_theme_emits_persist_setting_with_correct_payload() {
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
         assert_eq!(app.current_ui.theme, None);
-        crate::theme::cache::set(crate::theme::ThemeKind::GrokNight);
-        let effects = dispatch(Action::SetTheme("grokday".into()), &mut app);
+        crate::theme::cache::set(crate::theme::ThemeKind::FailureNight);
+        let effects = dispatch(Action::SetTheme("failureday".into()), &mut app);
         assert_eq!(effects.len(), 1);
         match &effects[0] {
             Effect::PersistSetting {
@@ -2745,12 +2745,12 @@ fn set_theme_emits_persist_setting_with_correct_payload() {
                 rollback_value,
             } => {
                 assert_eq!(*key, "theme");
-                assert_eq!(*value, SettingValue::Enum("grokday"));
-                assert_eq!(*rollback_value, SettingValue::Enum("groknight"));
+                assert_eq!(*value, SettingValue::Enum("failureday"));
+                assert_eq!(*rollback_value, SettingValue::Enum("failurenight"));
             }
             other => panic!("expected PersistSetting, got {other:?}"),
         }
-        assert_eq!(app.current_ui.theme.as_deref(), Some("grokday"));
+        assert_eq!(app.current_ui.theme.as_deref(), Some("failureday"));
         assert!(
             !crate::theme::cache::is_auto_mode(),
             "concrete theme commit must disable AUTO_MODE",
@@ -2758,7 +2758,7 @@ fn set_theme_emits_persist_setting_with_correct_payload() {
     });
 }
 /// Same payload contract as `set_theme_emits_persist_setting_with_correct_payload`
-/// for the auto-dark sibling. Uses `grokday` to avoid the
+/// for the auto-dark sibling. Uses `failureday` to avoid the
 /// `clamp_to_terminal` ambiguity in non-truecolor test envs;
 /// `apply_kind` doesn't fire here anyway (parent theme is not
 /// auto by default) but using a non-truecolor canonical keeps
@@ -2768,7 +2768,7 @@ fn set_auto_dark_theme_emits_persist_setting_with_correct_payload() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let effects = dispatch(Action::SetAutoDarkTheme("grokday".into()), &mut app);
+        let effects = dispatch(Action::SetAutoDarkTheme("failureday".into()), &mut app);
         assert_eq!(effects.len(), 1);
         match &effects[0] {
             Effect::PersistSetting {
@@ -2777,12 +2777,12 @@ fn set_auto_dark_theme_emits_persist_setting_with_correct_payload() {
                 rollback_value,
             } => {
                 assert_eq!(*key, "auto_dark_theme");
-                assert_eq!(*value, SettingValue::Enum("grokday"));
-                assert_eq!(*rollback_value, SettingValue::Enum("groknight"));
+                assert_eq!(*value, SettingValue::Enum("failureday"));
+                assert_eq!(*rollback_value, SettingValue::Enum("failurenight"));
             }
             other => panic!("expected PersistSetting, got {other:?}"),
         }
-        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("grokday"));
+        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("failureday"));
     });
 }
 #[test]
@@ -2790,7 +2790,7 @@ fn set_auto_light_theme_emits_persist_setting_with_correct_payload() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let effects = dispatch(Action::SetAutoLightTheme("groknight".into()), &mut app);
+        let effects = dispatch(Action::SetAutoLightTheme("failurenight".into()), &mut app);
         assert_eq!(effects.len(), 1);
         match &effects[0] {
             Effect::PersistSetting {
@@ -2799,14 +2799,14 @@ fn set_auto_light_theme_emits_persist_setting_with_correct_payload() {
                 rollback_value,
             } => {
                 assert_eq!(*key, "auto_light_theme");
-                assert_eq!(*value, SettingValue::Enum("groknight"));
-                assert_eq!(*rollback_value, SettingValue::Enum("grokday"));
+                assert_eq!(*value, SettingValue::Enum("failurenight"));
+                assert_eq!(*rollback_value, SettingValue::Enum("failureday"));
             }
             other => panic!("expected PersistSetting, got {other:?}"),
         }
         assert_eq!(
             app.current_ui.auto_light_theme.as_deref(),
-            Some("groknight"),
+            Some("failurenight"),
         );
     });
 }
@@ -2859,11 +2859,11 @@ fn preview_auto_light_theme_emits_no_persist_and_no_current_ui_mutation() {
 /// Auto-theme commit applies the live theme **only** when
 /// `theme="auto"` AND the system is in the matching mode.
 ///
-/// Scenario: `theme="groknight"` (concrete) + system=Dark. User
-/// commits `auto_dark_theme="grokday"`. The setting is dormant
+/// Scenario: `theme="failurenight"` (concrete) + system=Dark. User
+/// commits `auto_dark_theme="failureday"`. The setting is dormant
 /// (parent theme is concrete, not auto), so the live display
-/// must stay on GrokNight even though we're committing a
-/// different theme. Uses `grokday` to avoid `clamp_to_terminal`
+/// must stay on FailureNight even though we're committing a
+/// different theme. Uses `failureday` to avoid `clamp_to_terminal`
 /// ambiguity in non-truecolor envs.
 #[test]
 fn set_auto_dark_theme_does_not_apply_when_theme_is_not_auto() {
@@ -2872,28 +2872,28 @@ fn set_auto_dark_theme_does_not_apply_when_theme_is_not_auto() {
             crate::theme::system_appearance::SystemAppearance::Dark,
         ));
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetTheme("groknight".into()), &mut app);
+        let _ = dispatch(Action::SetTheme("failurenight".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokNight,
+            crate::theme::ThemeKind::FailureNight,
         );
-        let _ = dispatch(Action::SetAutoDarkTheme("grokday".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("failureday".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokNight,
+            crate::theme::ThemeKind::FailureNight,
             "auto_dark_theme commit must NOT change live display when theme is not auto",
         );
-        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("grokday"));
+        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("failureday"));
     });
 }
 /// Auto-theme commit DOES apply the live theme when both
 /// (a) parent theme = auto AND (b) system matches.
 ///
-/// Uses `GrokDay` (non-truecolor-requiring) for the dark-mode
+/// Uses `FailureDay` (non-truecolor-requiring) for the dark-mode
 /// fixture: the test environment's color detection may not report
 /// truecolor support, and `Theme::apply_kind` clamps
 /// truecolor-only themes (TokyoNight, RosePineMoon) down to
-/// GrokNight. Using a non-truecolor theme avoids the clamp
+/// FailureNight. Using a non-truecolor theme avoids the clamp
 /// uncertainty. The "live apply" contract is what we're testing
 /// — the specific theme picked is incidental.
 #[test]
@@ -2907,21 +2907,21 @@ fn set_auto_dark_theme_applies_when_theme_is_auto_and_system_is_dark() {
         assert!(crate::theme::cache::is_auto_mode());
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokNight,
+            crate::theme::ThemeKind::FailureNight,
         );
-        let _ = dispatch(Action::SetAutoDarkTheme("grokday".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("failureday".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokDay,
+            crate::theme::ThemeKind::FailureDay,
             "auto_dark_theme commit must update live display when theme=auto + system=Dark",
         );
     });
 }
 /// Auto-theme commit does NOT apply when system is in the
 /// non-matching mode (auto_dark_theme + system=Light).
-/// Uses `groknight` for the auto_dark_theme
+/// Uses `failurenight` for the auto_dark_theme
 /// value to avoid `clamp_to_terminal` ambiguity (we want a
-/// concrete kind that's clearly different from GrokDay, the
+/// concrete kind that's clearly different from FailureDay, the
 /// active resolved theme).
 #[test]
 fn set_auto_dark_theme_does_not_apply_when_system_is_light() {
@@ -2933,20 +2933,20 @@ fn set_auto_dark_theme_does_not_apply_when_system_is_light() {
         let _ = dispatch(Action::SetTheme("auto".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokDay,
+            crate::theme::ThemeKind::FailureDay,
         );
-        let _ = dispatch(Action::SetAutoDarkTheme("groknight".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("failurenight".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokDay,
+            crate::theme::ThemeKind::FailureDay,
             "auto_dark_theme commit must NOT change live display when system=Light",
         );
-        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("groknight"),);
+        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("failurenight"),);
     });
 }
 /// Symmetric to the dark test: `set_auto_light_theme` applies only
 /// when theme=auto + system=Light. Uses a non-truecolor theme
-/// (`groknight`) for the same clamp reason as the dark variant.
+/// (`failurenight`) for the same clamp reason as the dark variant.
 #[test]
 fn set_auto_light_theme_applies_when_theme_is_auto_and_system_is_light() {
     with_theme_test_env(|| {
@@ -2957,12 +2957,12 @@ fn set_auto_light_theme_applies_when_theme_is_auto_and_system_is_light() {
         let _ = dispatch(Action::SetTheme("auto".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokDay,
+            crate::theme::ThemeKind::FailureDay,
         );
-        let _ = dispatch(Action::SetAutoLightTheme("groknight".into()), &mut app);
+        let _ = dispatch(Action::SetAutoLightTheme("failurenight".into()), &mut app);
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokNight,
+            crate::theme::ThemeKind::FailureNight,
             "auto_light_theme must update display when theme=auto + system=Light",
         );
     });
@@ -3036,15 +3036,15 @@ fn set_auto_light_theme_rejects_auto_value() {
 fn set_theme_toast_format_uses_display_name() {
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetTheme("grokday".into()), &mut app);
+        let _ = dispatch(Action::SetTheme("failureday".into()), &mut app);
         let toast = read_toast(&app);
         assert!(
             toast.contains("Theme"),
             "toast must contain label, got: {toast:?}",
         );
         assert!(
-            toast.contains("Grok Day"),
-            "toast must use display name `Grok Day`, not canonical `grokday`, got: {toast:?}",
+            toast.contains("Failure Day"),
+            "toast must use display name `Failure Day`, not canonical `failureday`, got: {toast:?}",
         );
         assert!(toast.contains('\u{2713}'), "toast must contain the ✓ glyph");
     });
@@ -3053,10 +3053,10 @@ fn set_theme_toast_format_uses_display_name() {
 fn set_auto_dark_theme_toast_format_uses_display_name() {
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoDarkTheme("grokday".into()), &mut app);
+        let _ = dispatch(Action::SetAutoDarkTheme("failureday".into()), &mut app);
         let toast = read_toast(&app);
         assert!(toast.contains("Auto dark theme"));
-        assert!(toast.contains("Grok Day"));
+        assert!(toast.contains("Failure Day"));
         assert!(toast.contains('\u{2713}'));
     });
 }
@@ -3064,17 +3064,17 @@ fn set_auto_dark_theme_toast_format_uses_display_name() {
 fn set_auto_light_theme_toast_format_uses_display_name() {
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoLightTheme("groknight".into()), &mut app);
+        let _ = dispatch(Action::SetAutoLightTheme("failurenight".into()), &mut app);
         let toast = read_toast(&app);
         assert!(toast.contains("Auto light theme"));
-        assert!(toast.contains("Grok Night"));
+        assert!(toast.contains("Failure Night"));
     });
 }
 /// `apply_setting_rollback` for theme keys: a failed persist
 /// reverts `app.current_ui.theme` AND the live cache (mirror of
 /// `rollback_known_key_reverts_cache_and_no_effect`).
 ///
-/// Uses non-truecolor themes (`grokday` ↔ `groknight`) to avoid
+/// Uses non-truecolor themes (`failureday` ↔ `failurenight`) to avoid
 /// the `clamp_to_terminal` interaction in test environments that
 /// don't report truecolor support.
 #[test]
@@ -3082,28 +3082,28 @@ fn rollback_theme_reverts_current_ui_and_cache() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetTheme("grokday".into()), &mut app);
-        assert_eq!(app.current_ui.theme.as_deref(), Some("grokday"));
+        let _ = dispatch(Action::SetTheme("failureday".into()), &mut app);
+        assert_eq!(app.current_ui.theme.as_deref(), Some("failureday"));
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokDay,
+            crate::theme::ThemeKind::FailureDay,
         );
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {
                 key: "theme",
-                rollback_value: SettingValue::Enum("groknight"),
+                rollback_value: SettingValue::Enum("failurenight"),
                 error: "disk full".into(),
             }),
             &mut app,
         );
         assert_eq!(
             app.current_ui.theme.as_deref(),
-            Some("groknight"),
+            Some("failurenight"),
             "rollback must update app.current_ui.theme",
         );
         assert_eq!(
             crate::theme::cache::current_kind(),
-            crate::theme::ThemeKind::GrokNight,
+            crate::theme::ThemeKind::FailureNight,
             "rollback must update the live theme cache too",
         );
     });
@@ -3113,17 +3113,17 @@ fn rollback_auto_dark_theme_reverts_current_ui() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoDarkTheme("grokday".into()), &mut app);
-        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("grokday"));
+        let _ = dispatch(Action::SetAutoDarkTheme("failureday".into()), &mut app);
+        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("failureday"));
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {
                 key: "auto_dark_theme",
-                rollback_value: SettingValue::Enum("groknight"),
+                rollback_value: SettingValue::Enum("failurenight"),
                 error: "disk full".into(),
             }),
             &mut app,
         );
-        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("groknight"),);
+        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("failurenight"),);
     });
 }
 #[test]
@@ -3131,20 +3131,20 @@ fn rollback_auto_light_theme_reverts_current_ui() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoLightTheme("groknight".into()), &mut app);
+        let _ = dispatch(Action::SetAutoLightTheme("failurenight".into()), &mut app);
         assert_eq!(
             app.current_ui.auto_light_theme.as_deref(),
-            Some("groknight"),
+            Some("failurenight"),
         );
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {
                 key: "auto_light_theme",
-                rollback_value: SettingValue::Enum("grokday"),
+                rollback_value: SettingValue::Enum("failureday"),
                 error: "disk full".into(),
             }),
             &mut app,
         );
-        assert_eq!(app.current_ui.auto_light_theme.as_deref(), Some("grokday"));
+        assert_eq!(app.current_ui.auto_light_theme.as_deref(), Some("failureday"));
     });
 }
 /// Edge case — if the rollback value is
@@ -3159,8 +3159,8 @@ fn rollback_auto_dark_theme_with_auto_value_clears_to_none() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoDarkTheme("grokday".into()), &mut app);
-        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("grokday"));
+        let _ = dispatch(Action::SetAutoDarkTheme("failureday".into()), &mut app);
+        assert_eq!(app.current_ui.auto_dark_theme.as_deref(), Some("failureday"));
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {
                 key: "auto_dark_theme",
@@ -3181,10 +3181,10 @@ fn rollback_auto_light_theme_with_auto_value_clears_to_none() {
     use crate::settings::SettingValue;
     with_theme_test_env(|| {
         let mut app = test_app_with_agent();
-        let _ = dispatch(Action::SetAutoLightTheme("groknight".into()), &mut app);
+        let _ = dispatch(Action::SetAutoLightTheme("failurenight".into()), &mut app);
         assert_eq!(
             app.current_ui.auto_light_theme.as_deref(),
-            Some("groknight"),
+            Some("failurenight"),
         );
         let _ = dispatch(
             Action::TaskComplete(TaskResult::SettingPersistFailed {

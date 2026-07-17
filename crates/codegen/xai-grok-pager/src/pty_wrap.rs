@@ -89,12 +89,12 @@ pub(crate) fn run_wrapped_command(program: &str, args: &[String]) -> Result<i32>
     // "Copy failed" despite the copy actually working).
     //
     // `CommandBuilder::new` inherits the full parent environment; `env` overlays
-    // these two without clearing it. The canonical `GROK_OSC52_SINK` is
+    // these two without clearing it. The canonical `FAILURE_OSC52_SINK` is
     // inherited by local children; the `LC_`-prefixed alias rides the default
     // OpenSSH env forwarding (`SendEnv LANG LC_*` on the client,
     // `AcceptEnv LANG LC_*` on the server) so the signal survives the SSH hop.
-    cmd.env("GROK_OSC52_SINK", "1");
-    cmd.env("LC_GROK_OSC52_SINK", "1");
+    cmd.env("FAILURE_OSC52_SINK", "1");
+    cmd.env("LC_FAILURE_OSC52_SINK", "1");
 
     // Spawn child in the PTY slave.
     let mut child = pair.slave.spawn_command(cmd)?;

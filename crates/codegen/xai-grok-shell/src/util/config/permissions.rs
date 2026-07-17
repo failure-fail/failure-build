@@ -347,7 +347,7 @@ mod tests {
 
     #[test]
     fn permission_mode_from_ui_if_set_none_when_no_keys() {
-        let theme: TomlValue = toml::from_str("[ui]\ntheme = \"groknight\"\n").unwrap();
+        let theme: TomlValue = toml::from_str("[ui]\ntheme = \"failurenight\"\n").unwrap();
         assert_eq!(
             permission_mode_from_ui_if_set(theme.get("ui").unwrap()),
             None,
@@ -462,7 +462,7 @@ mod tests {
                 "ask",
             ),
             // No permission keys → Ask.
-            ("[ui]\ntheme = \"groknight\"\n", PermissionMode::Ask, "ask"),
+            ("[ui]\ntheme = \"failurenight\"\n", PermissionMode::Ask, "ask"),
         ];
         for (toml_str, expected_mode, expected_canonical) in cases {
             let root: TomlValue = toml::from_str(toml_str).unwrap();
@@ -644,7 +644,7 @@ mod tests {
         let _g = crate::util::config::resolve::AUTO_PERMISSION_MODE_ENV_LOCK
             .lock()
             .unwrap_or_else(|p| p.into_inner());
-        unsafe { std::env::set_var("GROK_AUTO_PERMISSION_MODE", "1") };
+        unsafe { std::env::set_var("FAILURE_AUTO_PERMISSION_MODE", "1") };
         assert!(effective_auto_for_launch(false, Some("auto"), None));
         assert!(
             !effective_auto_for_launch(true, Some("auto"), None),
@@ -656,7 +656,7 @@ mod tests {
             None
         ));
         assert!(!effective_auto_for_launch(false, Some("ask"), None));
-        unsafe { std::env::remove_var("GROK_AUTO_PERMISSION_MODE") };
+        unsafe { std::env::remove_var("FAILURE_AUTO_PERMISSION_MODE") };
     }
 
     /// The authoritative agent-side gate (used at the `set_auto_mode` seam):
@@ -683,7 +683,7 @@ mod tests {
         );
     }
 
-    /// With the gate forced OFF (`GROK_AUTO_PERMISSION_MODE=0`), explicit
+    /// With the gate forced OFF (`FAILURE_AUTO_PERMISSION_MODE=0`), explicit
     /// `--permission-mode auto` / config auto is inert so the classifier never
     /// launches. (Compiled-in default is ON; this pins the env kill-switch.)
     #[test]
@@ -691,7 +691,7 @@ mod tests {
         let _g = crate::util::config::resolve::AUTO_PERMISSION_MODE_ENV_LOCK
             .lock()
             .unwrap_or_else(|p| p.into_inner());
-        unsafe { std::env::set_var("GROK_AUTO_PERMISSION_MODE", "0") };
+        unsafe { std::env::set_var("FAILURE_AUTO_PERMISSION_MODE", "0") };
         assert!(
             !effective_auto_for_launch(false, Some("auto"), None),
             "gate OFF: explicit --permission-mode auto must not activate auto"
@@ -700,7 +700,7 @@ mod tests {
             !effective_auto_for_launch(false, None, None),
             "gate OFF: config-driven auto must not activate auto"
         );
-        unsafe { std::env::remove_var("GROK_AUTO_PERMISSION_MODE") };
+        unsafe { std::env::remove_var("FAILURE_AUTO_PERMISSION_MODE") };
     }
 
     // Pure tests for the policy predicate itself live next to its canonical
