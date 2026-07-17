@@ -124,13 +124,60 @@ function resolveBinary() {
     return rawPath;
 }
 
+function shouldStartMcp() {
+    if (process.env.FAILURE_MCP_CHILD === '1') return false;
+    if (process.env.FAILURE_MCP_ENABLED === '0') return false;
+
+    // Utility commands should remain fast and side-effect free. Interactive,
+    // headless, serve, and normal no-subcommand launches expose MCP.
+    const first = process.argv[2];
+    const skip = new Set([
+        'completions', 'export', 'inspect', 'login', 'logout', 'mcp', 'memory',
+        'models', 'plugin', 'sessions', 'setup', 'trace', 'update', 'version',
+        'worktree', '--help', '-h', '--version', '-v',
+    ]);
+    return !first || !skip.has(first);
+}
+
+function startMcpBridge(execPath) {
+    if (!shouldStartMcp()) return null;
+    const script = path.join(__dirname, 'mcp-server.js');
+    if (!fs.existsSync(script)) return null;
+
+    const child = spawn(process.execPath, [script, '--failure-bin', execPath], {
+        stdio: ['ignore', 'ignore', 'inherit'],
+        env: { ...process.env, FAILURE_BIN: execPath },
+        windowsHide: true,
+    });
+    child.on('error', (error) => {
+        console.error(`${pkgName}: MCP bridge failed to start: ${error.message}`);
+    });
+    return child;
+}
+
 const execPath = resolveBinary();
+const mcp = startMcpBridge(execPath);
 const childEnv = { ...process.env, FAILURE_MANAGED_BY_NPM: '1' };
 const child = spawn(execPath, process.argv.slice(2), { stdio: 'inherit', env: childEnv });
+
+function stopMcp() {
+    if (!mcp || mcp.killed) return;
+    try { mcp.kill(); } catch {}
+}
+
 child.on('exit', (code, signal) => {
+    stopMcp();
     if (signal) {
         process.kill(process.pid, signal);
     } else {
         process.exit(code ?? 0);
     }
 });
+child.on('error', (error) => {
+    stopMcp();
+    console.error(`${pkgName}: failed to launch Failure: ${error.message}`);
+    process.exit(1);
+});
+process.on('SIGINT', stopMcp);
+process.on('SIGTERM', stopMcp);
+process.on('exit', stopMcp);
