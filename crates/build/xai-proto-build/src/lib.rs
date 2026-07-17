@@ -114,10 +114,24 @@ impl XaiProtoBuilder {
 
         // Can only process one input file when using --dependency_out=FILE.
         for proto in protos {
+            // `/dev/stdout`/`/dev/null` are Unix-only special files; protoc on
+            // Windows has no equivalent, so both outputs go to real temp files
+            // instead (the descriptor set itself is unused here, only the
+            // dependency list is read back).
+            let dep_out = tempfile::NamedTempFile::new()
+                .context("failed to create temp file for --dependency_out")?;
+            let descriptor_out = tempfile::NamedTempFile::new()
+                .context("failed to create temp file for --descriptor_set_out")?;
             let mut command = Command::new(protoc.unwrap_or(Path::new("protoc")));
             command
-                .arg("--dependency_out=/dev/stdout")
-                .arg("--descriptor_set_out=/dev/null");
+                .arg(format!(
+                    "--dependency_out={}",
+                    dep_out.path().to_str().context("temp path not UTF-8")?
+                ))
+                .arg(format!(
+                    "--descriptor_set_out={}",
+                    descriptor_out.path().to_str().context("temp path not UTF-8")?
+                ));
 
             // Add protoc's well-known types include directory first (if found).
             // This is needed for Bazel sandboxed builds where protoc and its
@@ -143,14 +157,18 @@ impl XaiProtoBuilder {
                 return Err(anyhow::anyhow!("protoc command failed"));
             }
 
-            let output =
-                String::from_utf8(output.stdout).context("protoc command output not UTF-8")?;
+            let output = fs::read_to_string(dep_out.path())
+                .context("failed to read --dependency_out temp file")?;
 
+            // protoc's dependency_out is a Makefile rule: "<descriptor_set_out>: dep1 dep2 ...".
+            let prefix = format!(
+                "{}:",
+                descriptor_out.path().to_str().context("temp path not UTF-8")?
+            );
             let mut lines = output.lines();
             let first_line = lines.next().context("protoc command output is empty")?;
-            let prefix = "/dev/null:";
-            let rem = first_line.strip_prefix(prefix).with_context(|| {
-                format!("protoc command output must start with /dev/null: {output:?}")
+            let rem = first_line.strip_prefix(prefix.as_str()).with_context(|| {
+                format!("protoc command output must start with {prefix:?}: {output:?}")
             })?;
             for line in iter::once(rem).chain(lines) {
                 let line = line.trim();
