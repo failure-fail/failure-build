@@ -42,22 +42,78 @@ agent API, so clients such as Claude can create chats, load existing chats,
 send prompts, and let Failure use its normal coding, file, terminal, search,
 and subagent tools.
 
-The local endpoint and generated access token are printed on startup and saved
-to:
+The endpoint information and generated access token are saved to:
 
 ```text
 ~/.failure/mcp.json
 ```
 
-The state file contains a ready-to-paste URL similar to:
+The state file always contains a local URL:
 
 ```text
 http://127.0.0.1:2420/mcp?token=<generated-token>
 ```
 
 When `cloudflared` is installed, Failure also starts a Cloudflare Quick Tunnel
-and writes a temporary public HTTPS endpoint into the same state file. Paste
-that public URL into a remote MCP client such as Claude.
+and records a temporary public URL.
+
+### Stable Cloudflare Worker URL
+
+Users can provide a Cloudflare API token and account ID once, then access
+Failure through a stable `workers.dev` URL instead of copying a new Quick
+Tunnel URL every launch.
+
+Configure it interactively:
+
+```bash
+failure mcp-worker configure
+```
+
+Failure asks for:
+
+- a Cloudflare API token with **Workers Scripts Write** permission
+- the Cloudflare account ID
+- a Worker name, defaulting to `failure-mcp`
+
+The credentials are stored locally with owner-only permissions at:
+
+```text
+~/.failure/cloudflare-worker.json
+```
+
+After configuration, launch Failure normally:
+
+```bash
+failure
+```
+
+Failure will:
+
+1. start the local MCP bridge
+2. start a Cloudflare Quick Tunnel to the local bridge
+3. create or update the configured Worker
+4. point the Worker at the new tunnel origin
+5. write a stable `workerUrl` into `~/.failure/mcp.json`
+
+The resulting URL looks like:
+
+```text
+https://failure-mcp.<account-subdomain>.workers.dev/mcp?token=<generated-token>
+```
+
+Paste that `workerUrl` into Claude or another remote MCP client. The Worker URL
+stays the same across launches while Failure updates its private upstream
+origin automatically.
+
+Other Worker commands:
+
+```bash
+# Show saved configuration with a masked API token
+failure mcp-worker status
+
+# Remove the local Worker configuration and token
+failure mcp-worker disable
+```
 
 The bridge exposes these MCP tools:
 
@@ -68,9 +124,9 @@ The bridge exposes these MCP tools:
 - `failure_status`
 - `failure_rpc` for direct access to any supported ACP JSON-RPC method
 
-The generated token is required for both local and public requests. Treat the
-URL as a password: remote callers can direct Failure to edit files and execute
-commands through the agent.
+The generated MCP token is required for local, Quick Tunnel, and Worker
+requests. Treat the complete URL as a password: remote callers can direct
+Failure to edit files and execute commands through the agent.
 
 Configuration:
 
@@ -78,22 +134,25 @@ Configuration:
 # Disable the bridge completely
 FAILURE_MCP_ENABLED=0 failure
 
-# Keep MCP local and disable the public tunnel
+# Keep MCP local and disable all public access
 FAILURE_MCP_TUNNEL=0 failure
 
 # Change the local port
 FAILURE_MCP_PORT=9000 failure
 
-# Use a fixed token instead of an automatically generated one
+# Use a fixed MCP access token
 FAILURE_MCP_TOKEN="your-secret" failure
+
+# Supply Cloudflare configuration non-interactively
+CLOUDFLARE_API_TOKEN="..." CLOUDFLARE_ACCOUNT_ID="..." failure mcp-worker configure
 
 # Override the cloudflared executable
 CLOUDFLARED_BIN="/path/to/cloudflared" failure
 ```
 
 Utility commands such as `failure sessions`, `failure update`, and
-`failure models` do not start the bridge. The bridge exits automatically when
-the Failure process exits.
+`failure models` do not start the bridge. The bridge and Worker update daemon
+exit automatically when the Failure process exits.
 
 ## Update
 
