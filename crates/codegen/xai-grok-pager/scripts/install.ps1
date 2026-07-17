@@ -1,14 +1,14 @@
 #
-# Grok CLI installer for PowerShell — https://x.ai/cli/install.ps1
+# Failure CLI installer for PowerShell — https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.ps1
 #
-# Auth: FAILURE_DEPLOYMENT_KEY env var (takes precedence) or ~/.failure/auth.json from `grok login`.
+# Auth: FAILURE_DEPLOYMENT_KEY env var (takes precedence) or ~/.failure/auth.json from `failure login`.
 # Env: FAILURE_CHANNEL (stable|alpha|enterprise, default: stable), FAILURE_BIN_DIR, FAILURE_PROXY_URL
 #
 # Usage:
-#   irm https://x.ai/cli/install.ps1 | iex                                       # latest stable
-#   & ([scriptblock]::Create((irm https://x.ai/cli/install.ps1))) -Version 0.1.42 # specific version
-#   $env:FAILURE_VERSION="0.1.42"; irm https://x.ai/cli/install.ps1 | iex           # specific version (alt)
-#   $env:FAILURE_DEPLOYMENT_KEY="<key>"; irm https://x.ai/cli/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.ps1 | iex
+#   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.ps1))) -Version 0.1.42
+#   $env:FAILURE_VERSION="0.1.42"; irm https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.ps1 | iex
+#   $env:FAILURE_DEPLOYMENT_KEY="<key>"; irm https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.ps1 | iex
 #
 
 param(
@@ -18,7 +18,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# PS 5.1 defaults to TLS 1.0; GCS requires TLS 1.2.
+# PS 5.1 defaults to TLS 1.0; GitHub requires TLS 1.2.
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 # PS 5.1's Invoke-WebRequest progress bar is extremely slow; disable it.
@@ -31,7 +31,7 @@ if (-not $Version -and $env:FAILURE_VERSION) {
 
 # This script is Windows-only. PS 5.1 has no Platform property and only runs on Windows.
 if ($PSVersionTable.Platform -and $PSVersionTable.Platform -ne 'Win32NT') {
-    Write-Error "This installer is for Windows. On macOS/Linux, use: curl -fsSL https://x.ai/cli/install.sh | bash"
+    Write-Error "This installer is for Windows. On macOS/Linux, use: curl -fsSL https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.sh | bash"
     exit 1
 }
 
@@ -147,8 +147,11 @@ $platform = "windows-$arch"
 
 # --- Resolve version and channel ---
 
-$BaseUrlPrimary = 'https://x.ai/cli'
-$BaseUrlFallback = 'https://storage.googleapis.com/grok-build-public-artifacts/cli'
+# GitHub Releases on this fork's own repo. `releases/latest/download/<asset>`
+# is a stable GitHub-hosted redirect to whatever release is currently marked
+# "latest", so it works as both the channel-pointer host and the binary host
+# without any release-specific URL here.
+$BaseUrl = 'https://github.com/failure-fail/failure-build/releases/latest/download'
 $DownloadDir = Join-Path $GrokDir 'downloads'
 $BinDir = if ($env:FAILURE_BIN_DIR) { $env:FAILURE_BIN_DIR } else { Join-Path $GrokDir 'bin' }
 
@@ -157,26 +160,17 @@ New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
 
 $Channel = if ($env:FAILURE_CHANNEL) { $env:FAILURE_CHANNEL } else { 'stable' }
 
-# Pick a working BaseUrl: try Cloudflare-fronted x.ai first, fall back to
-# direct GCS if it's unreachable. The probe doubles as the channel-pointer
-# fetch when no -Version was passed, so the happy path costs zero extra requests.
-if (-not $Version) { Write-Host "Fetching latest $Channel version..." -ForegroundColor DarkGray }
-$probeResult = Download-String "$BaseUrlPrimary/$Channel"
-if ($probeResult) {
-    $BaseUrl = $BaseUrlPrimary
-} else {
-    Write-Host "Note: $BaseUrlPrimary unreachable, falling back to direct GCS." -ForegroundColor Yellow
-    $BaseUrl = $BaseUrlFallback
-    $probeResult = Download-String "$BaseUrl/$Channel"
-}
-
 if ($Version) {
     $resolvedVersion = $Version
-} elseif ($probeResult) {
-    $resolvedVersion = $probeResult.Trim()
 } else {
-    Write-Error "Failed to fetch latest version from $BaseUrlPrimary/$Channel and $BaseUrlFallback/$Channel"
-    exit 1
+    Write-Host "Fetching latest $Channel version..." -ForegroundColor DarkGray
+    $probeResult = Download-String "$BaseUrl/$Channel"
+    if ($probeResult) {
+        $resolvedVersion = $probeResult.Trim()
+    } else {
+        Write-Error "Failed to fetch latest version from $BaseUrl/$Channel"
+        exit 1
+    }
 }
 
 if ($AuthSource) {

@@ -1,14 +1,14 @@
 #!/bin/bash
 #
-# Failure CLI installer — https://x.ai/cli/install.sh
+# Failure CLI installer — https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.sh
 #
 # Auth: FAILURE_DEPLOYMENT_KEY (takes precedence) or ~/.failure/auth.json from `failure login`.
 # Env: FAILURE_CHANNEL (stable|alpha|enterprise, default: stable), FAILURE_BIN_DIR, FAILURE_PROXY_URL
 #
 # Usage:
-#   curl -fsSL https://x.ai/cli/install.sh | bash            # latest stable
-#   curl -fsSL https://x.ai/cli/install.sh | bash -s 0.1.42  # specific version
-#   FAILURE_DEPLOYMENT_KEY=<key> bash <(curl -fsSL https://x.ai/cli/install.sh)
+#   curl -fsSL https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.sh | bash            # latest stable
+#   curl -fsSL https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.sh | bash -s 0.1.42  # specific version
+#   FAILURE_DEPLOYMENT_KEY=<key> bash <(curl -fsSL https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.sh)
 #
 # Windows: run under Git for Windows / MSYS2 Bash (same curl | bash flow); WSL
 # uses the Linux binary.
@@ -151,13 +151,11 @@ case "$(uname -m)" in
     *)                    echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
 esac
 
-# NOTE(rebrand): these two hosts are xAI's own release infrastructure and
-# still serve "grok-<version>-<platform>" artifacts, not the
-# "failure-<version>-<platform>" names this script now requests below.
-# This fork has no release hosting of its own yet — repoint these once it
-# does, or this install flow will 404 until then.
-BASE_URL_PRIMARY="https://x.ai/cli"
-BASE_URL_FALLBACK="https://storage.googleapis.com/grok-build-public-artifacts/cli"
+# GitHub Releases on this fork's own repo. `releases/latest/download/<asset>`
+# is a stable GitHub-hosted redirect to whatever release is currently marked
+# "latest", so it works as both the channel-pointer host and the binary host
+# without any release-specific URL here.
+BASE_URL="https://github.com/failure-fail/failure-build/releases/latest/download"
 DOWNLOAD_DIR="$HOME/.failure/downloads"
 BIN_DIR="${FAILURE_BIN_DIR:-$HOME/.failure/bin}"
 mkdir -p "$DOWNLOAD_DIR" "$BIN_DIR"
@@ -165,26 +163,14 @@ mkdir -p "$DOWNLOAD_DIR" "$BIN_DIR"
 platform="${os}-${arch}"
 CHANNEL="${FAILURE_CHANNEL:-stable}"
 
-# Pick a working BASE_URL: try Cloudflare-fronted x.ai first, fall back to
-# direct GCS if it's unreachable. The probe doubles as the channel-pointer
-# fetch when no explicit TARGET was passed, so the happy path costs zero
-# extra HTTP requests.
-if [ -z "$TARGET" ]; then echo "Fetching latest ${CHANNEL} version..." >&2; fi
-probe_result=$(download_file "${BASE_URL_PRIMARY}/${CHANNEL}" 2>/dev/null) || true
-if [ -n "$probe_result" ]; then
-    BASE_URL="$BASE_URL_PRIMARY"
-else
-    echo "Note: ${BASE_URL_PRIMARY} unreachable, falling back to direct GCS." >&2
-    BASE_URL="$BASE_URL_FALLBACK"
-    probe_result=$(download_file "${BASE_URL}/${CHANNEL}" 2>/dev/null) || true
-fi
-
 if [ -n "$TARGET" ]; then
     version="$TARGET"
 else
+    echo "Fetching latest ${CHANNEL} version..." >&2
+    probe_result=$(download_file "${BASE_URL}/${CHANNEL}" 2>/dev/null) || true
     version=$(printf '%s' "$probe_result" | tr -d '\r' | head -n1 | tr -d '[:space:]')
     if [ -z "$version" ]; then
-        echo "Error: failed to fetch latest version from ${BASE_URL_PRIMARY}/${CHANNEL} and ${BASE_URL_FALLBACK}/${CHANNEL}" >&2
+        echo "Error: failed to fetch latest version from ${BASE_URL}/${CHANNEL}" >&2
         exit 1
     fi
 fi

@@ -32,13 +32,29 @@ Build recorded at the repository root.
 
 ## Installing the released binary
 
-Prebuilt binaries aren't hosted for this fork yet — see
-[Building from source](#building-from-source) below.
-[`crates/codegen/xai-grok-pager/scripts/install.sh`](crates/codegen/xai-grok-pager/scripts/install.sh)
-and its `install-enterprise.sh` sibling are rebranded and ready to use once
-release artifacts are published somewhere this fork controls; today they
-still point at upstream xAI's install infrastructure, which serves the
-upstream `grok` binary, not `failure`.
+```sh
+curl -fsSL https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.sh | bash
+```
+
+Or via npm:
+
+```sh
+npm i -g @failure-build/failure
+```
+
+On Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/codegen/xai-grok-pager/scripts/install.ps1 | iex
+```
+
+Both installers pull binaries from this repo's
+[GitHub Releases](https://github.com/failure-fail/failure-build/releases).
+**This fork's first release only ships a linux-x86_64 binary** — macOS,
+Windows, and linux-arm64 builds need this repo's own CI cross-compilation
+set up (see `crates/codegen/xai-grok-pager/npm/failure/scripts/assemble-platform-packages.js`
+for the six targets it expects) and aren't published yet. On an unsupported
+platform, fall back to [Building from source](#building-from-source) below.
 
 ## Building from source
 

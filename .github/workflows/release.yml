@@ -1,0 +1,124 @@
+name: Release
+
+# Builds the `failure` binary for every platform install.sh/install.ps1 know
+# how to fetch, then publishes them as a GitHub Release. install.sh/.ps1
+# resolve binaries via `releases/latest/download/<asset>`, so this workflow
+# is what makes that URL resolve to something real.
+#
+# Trigger by pushing a tag like `v0.1.220-alpha.4` (the `v` is stripped to
+# get the version used in asset names / the channel-pointer files), or run
+# manually via workflow_dispatch with an explicit version.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (no leading v), e.g. 0.1.220-alpha.4"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: ubuntu-24.04-arm
+            platform: linux-aarch64
+          - os: macos-14
+            platform: macos-aarch64
+          - os: macos-13
+            platform: macos-x86_64
+          - os: windows-latest
+            platform: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        run: rustup show
+
+      - name: Install protoc (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install protoc (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+
+      - name: Install protoc (Windows)
+        if: runner.os == 'Windows'
+        run: choco install protoc -y
+
+      - name: Build release binary
+        run: cargo build --release -p xai-grok-pager-bin
+
+      - name: Stage artifact (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/release/xai-grok-pager "dist/failure-${{ matrix.platform }}"
+
+      - name: Stage artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target/release/xai-grok-pager.exe "dist/failure-${{ matrix.platform }}.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: failure-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: staging
+          merge-multiple: true
+
+      - name: Rename assets to failure-<version>-<platform> and write channel pointers
+        shell: bash
+        run: |
+          set -e
+          version="${{ steps.version.outputs.version }}"
+          mkdir -p dist
+          for f in staging/*; do
+            name="$(basename "$f")"
+            # name is "failure-<platform>" or "failure-<platform>.exe"
+            mv "$f" "dist/${name/failure-/failure-${version}-}"
+          done
+          echo -n "$version" > dist/stable
+          echo -n "$version" > dist/alpha
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: dist/*
