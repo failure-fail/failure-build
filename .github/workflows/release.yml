@@ -55,7 +55,20 @@ jobs:
 
       - name: Install protoc (Windows)
         if: runner.os == 'Windows'
-        run: choco install protoc -y
+        shell: pwsh
+        run: |
+          choco install protoc -y
+          # Chocolatey shims land in a dir that's already on PATH for new
+          # processes, but build.rs's $PROTOC fallback is more reliable than
+          # depending on that PATH refresh landing before the next step.
+          $protoc = Get-Command protoc.exe -ErrorAction SilentlyContinue
+          if (-not $protoc) {
+            $protoc = Get-ChildItem "C:\ProgramData\chocolatey\lib\protoc\tools\bin\protoc.exe" -ErrorAction SilentlyContinue
+          }
+          if (-not $protoc) { throw "protoc.exe not found after choco install" }
+          $protocPath = $protoc.Source ?? $protoc.FullName
+          Write-Host "Found protoc at $protocPath"
+          echo "PROTOC=$protocPath" >> $env:GITHUB_ENV
 
       - name: Build release binary
         run: cargo build --release -p xai-grok-pager-bin
