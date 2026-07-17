@@ -20,7 +20,7 @@ OpenAI, Anthropic, Ollama, or any custom OpenAI-compatible endpoint.
 [Contributing](#contributing) ·
 [License](#license)
 
-<!-- TODO: project logo/screenshot goes here once this fork has its own assets -->
+![Failure Build welcome screen](docs/media/welcome-demo.gif)
 
 This repository contains the Rust source for the `failure` CLI/TUI and its
 agent runtime, forked from the `SOURCE_REV` monorepo commit of xAI's Grok
