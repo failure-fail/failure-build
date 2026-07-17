@@ -87,13 +87,11 @@ pub(super) fn dispatch_show_privacy_info(app: &mut AppView) -> Vec<Effect> {
     } else {
         // Coding data sharing opted in -- matches desktop's "Share data" state.
         lines.push("  Privacy: share data");
-        lines.push("  Usage and code data may be used by SpaceXAI to improve the product.");
+        lines.push("  Usage and code data may be used by x.ai to improve the product.");
         lines.push("");
         lines.push("  Use /privacy opt-out to enable privacy mode.");
     }
 
-    lines.push("");
-    lines.push("  Learn more: https://x.ai/legal");
     let text = lines.join("\n");
     push_system_to_any_agent(app, &text);
     vec![]
@@ -105,7 +103,7 @@ pub(super) fn set_coding_data_sharing_inner(app: &mut AppView, opted_in: bool) {
 }
 
 /// Set coding-data-sharing preference. SHELL-owned, auth-metadata-backed
-/// (persists via ACP ext-request, NOT `~/.grok/config.toml`).
+/// (persists via ACP ext-request, NOT `~/.failure/config.toml`).
 pub(super) fn set_coding_data_sharing(app: &mut AppView, opted_in: bool) -> Vec<Effect> {
     // ── Guard 1: Enterprise ZDR ──────────────────────────────────────
     if app.is_zdr {

@@ -8,7 +8,7 @@
 //! Backend environment presets for the Grok CLI crate family: endpoint URL
 //! defaults, environment selection, and env-var test support.
 //!
-//! Public builds expose production endpoints. Values resolve as a `GROK_*`
+//! Public builds expose production endpoints. Values resolve as a `FAILURE_*`
 //! env-var override when set, else the compiled production default.
 /// The endpoint set for one backend environment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +51,7 @@ impl GrokBuildEnvironment {
     }
     fn env_prefix(&self) -> &'static str {
         match self {
-            GrokBuildEnvironment::Production => "GROK_PRODUCTION",
+            GrokBuildEnvironment::Production => "FAILURE_PRODUCTION",
         }
     }
     /// Compiled endpoint set for this environment (production by default).
@@ -84,7 +84,7 @@ impl GrokBuildEnvironment {
         self.resolve("_WS_URL", self.endpoints().relay_ws_url)
     }
     /// The gateway WebSocket URL for `/cloud new` sandboxes. The shell's
-    /// `GROK_GATEWAY_URL` opt-in takes precedence.
+    /// `FAILURE_GATEWAY_URL` opt-in takes precedence.
     pub fn gateway_ws_url(&self) -> String {
         self.resolve("_GATEWAY_WS_URL", self.endpoints().gateway_ws_url)
     }
@@ -155,7 +155,7 @@ mod tests {
     fn test_env_prefix() {
         assert_eq!(
             GrokBuildEnvironment::Production.env_prefix(),
-            "GROK_PRODUCTION"
+            "FAILURE_PRODUCTION"
         );
     }
     #[test]

@@ -4,10 +4,10 @@
 > additive changes may occur without notice, renames/removals will bump the
 > version and be called out in the changelog.
 
-Grok CLI can export usage **metrics** and **events** to your organization's
+Failure CLI can export usage **metrics** and **events** to your organization's
 own OpenTelemetry collector, so platform teams can monitor adoption, token
 consumption, tool-permission decisions, and errors across the fleet — without
-any data flowing through SpaceXAI.
+any data flowing through x.ai.
 
 The external stream is:
 
@@ -16,26 +16,26 @@ The external stream is:
 - **Content-free by default**: no prompts, no code, no file paths (extension
   only), no tool arguments, no bash commands, and MCP/skill/plugin names
   collapsed to categories. Optional content gates re-enable some of these.
-- **Structurally separate** from SpaceXAI-internal telemetry: its exporters carry
-  only the headers you configure, never SpaceXAI credentials.
-- **Independent of SpaceXAI data-retention opt-outs**: it works even when
+- **Structurally separate** from x.ai-internal telemetry: its exporters carry
+  only the headers you configure, never x.ai credentials.
+- **Independent of x.ai data-retention opt-outs**: it works even when
   `telemetry` is disabled and for ZDR (zero-data-retention) teams — those
-  settings govern SpaceXAI-side retention; the external stream is governed solely
+  settings govern x.ai-side retention; the external stream is governed solely
   by your own OTEL configuration.
 
 ## Quick start
 
 ```bash
-export GROK_EXTERNAL_OTEL=1                  # master switch
+export FAILURE_EXTERNAL_OTEL=1                  # master switch
 export OTEL_METRICS_EXPORTER=otlp
 export OTEL_LOGS_EXPORTER=otlp
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf  # or grpc
 export OTEL_EXPORTER_OTLP_ENDPOINT=https://collector.corp.example:4318
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <collector-token>"
-grok
+failure
 ```
 
-`GROK_EXTERNAL_OTEL=1` alone enables **nothing** — you must also select at
+`FAILURE_EXTERNAL_OTEL=1` alone enables **nothing** — you must also select at
 least one exporter. Conversely, the `OTEL_*` vars alone enable nothing
 without the master switch.
 
@@ -43,7 +43,7 @@ without the master switch.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GROK_EXTERNAL_OTEL` | `0` | Master switch. Distinct from `GROK_TELEMETRY_ENABLED`, which controls SpaceXAI-internal product analytics — the two govern opposite-pointing data flows. |
+| `FAILURE_EXTERNAL_OTEL` | `0` | Master switch. Distinct from `FAILURE_TELEMETRY_ENABLED`, which controls x.ai-internal product analytics — the two govern opposite-pointing data flows. |
 | `OTEL_METRICS_EXPORTER` | `none` | `otlp` \| `console` \| `none`. |
 | `OTEL_LOGS_EXPORTER` | `none` | `otlp` \| `console` \| `none`. Gates the event stream. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | `http/protobuf` \| `grpc`. |
@@ -64,7 +64,7 @@ from a fixed, audited attribute set.
 
 > **Migration note:** older releases could share `OTEL_EXPORTER_OTLP_*` with
 > the product's own analytics pipeline. That behavior is deprecated: when
-> `GROK_EXTERNAL_OTEL` is set, product analytics ignores those vars, and the
+> `FAILURE_EXTERNAL_OTEL` is set, product analytics ignores those vars, and the
 > CLI refuses to activate the external stream in any configuration where
 > product analytics already consumed them — your collector only receives the
 > external stream you opted into.
@@ -87,7 +87,7 @@ otel_log_tool_details = false
 ```
 
 The config keys are `otel_*` under `[telemetry]`; the **env vars keep their
-standard OTEL names** (`GROK_EXTERNAL_OTEL`, `OTEL_*`) for ecosystem
+standard OTEL names** (`FAILURE_EXTERNAL_OTEL`, `OTEL_*`) for ecosystem
 interop, so the two layers use deliberately different namespaces. The
 `otel_protocol` config key maps to `OTEL_EXPORTER_OTLP_PROTOCOL`.
 
@@ -95,7 +95,7 @@ There is deliberately no `headers` key: supply collector auth via
 `OTEL_EXPORTER_OTLP_HEADERS` so tokens are never stored on disk.
 
 Managed deployments can additionally enable org-wide telemetry by distributing
-the `[telemetry]` `otel_*` keys through `grok setup` managed config /
+the `[telemetry]` `otel_*` keys through `failure setup` managed config /
 requirements pins, or force-disable it fleet-wide with the same local config
 layers (`external_otel_disabled`, content-gate locks).
 

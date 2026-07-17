@@ -2,7 +2,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-use super::model::{API_KEY_SCOPE, AuthMode, AuthStore, GrokAuth, lookup_auth};
+use super::model::{
+    API_KEY_SCOPE, AuthMode, AuthStore, GrokAuth, lookup_auth, provider_api_key_scope,
+};
 
 /// RAII guard for an exclusive advisory lock on `auth.json.lock`.
 /// The lock is released when the inner `File` is dropped (closing the FD).
@@ -336,22 +338,23 @@ pub fn read_token_by_scope(grok_home: &Path, scope: &str) -> anyhow::Result<Stri
     })
 }
 
-/// Read the API key from the `xai::api_key` scope in auth.json.
-pub fn read_api_key(grok_home: &Path) -> Option<String> {
+/// Read an API key from an arbitrary auth.json scope (see
+/// [`provider_api_key_scope`]).
+pub fn read_provider_api_key(grok_home: &Path, scope: &str) -> Option<String> {
     let path = grok_home.join("auth.json");
     let map = read_auth_json(&path).ok()?;
-    map.get(API_KEY_SCOPE).map(|a| a.key.clone())
+    map.get(scope).map(|a| a.key.clone())
 }
 
-/// Store a plain API key in auth.json under the `xai::api_key` scope.
+/// Store a plain API key in auth.json under an arbitrary scope.
 ///
 /// Uses the corrupt-recovery reader so a malformed auth.json (e.g. from a
 /// previous crash) can be healed when the user sets an API key.
-pub fn store_api_key(grok_home: &Path, api_key: &str) -> std::io::Result<()> {
+pub fn store_provider_api_key(grok_home: &Path, scope: &str, api_key: &str) -> std::io::Result<()> {
     let path = grok_home.join("auth.json");
     let mut map = read_auth_json_or_empty_recovering_corrupt(&path)?;
     map.insert(
-        API_KEY_SCOPE.to_owned(),
+        scope.to_owned(),
         GrokAuth {
             key: api_key.to_owned(),
             auth_mode: AuthMode::ApiKey,
@@ -361,11 +364,11 @@ pub fn store_api_key(grok_home: &Path, api_key: &str) -> std::io::Result<()> {
     write_auth_json(&path, &map)
 }
 
-/// Remove the `xai::api_key` scope from auth.json.
-pub fn clear_api_key(grok_home: &Path) -> std::io::Result<()> {
+/// Remove an arbitrary scope from auth.json.
+pub fn clear_provider_api_key(grok_home: &Path, scope: &str) -> std::io::Result<()> {
     let path = grok_home.join("auth.json");
     if let Ok(mut map) = read_auth_json(&path) {
-        map.remove(API_KEY_SCOPE);
+        map.remove(scope);
         if map.is_empty() {
             let _ = std::fs::remove_file(&path);
         } else {
@@ -373,6 +376,21 @@ pub fn clear_api_key(grok_home: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Read the API key from the `xai::api_key` scope in auth.json.
+pub fn read_api_key(grok_home: &Path) -> Option<String> {
+    read_provider_api_key(grok_home, API_KEY_SCOPE)
+}
+
+/// Store a plain API key in auth.json under the `xai::api_key` scope.
+pub fn store_api_key(grok_home: &Path, api_key: &str) -> std::io::Result<()> {
+    store_provider_api_key(grok_home, API_KEY_SCOPE, api_key)
+}
+
+/// Remove the `xai::api_key` scope from auth.json.
+pub fn clear_api_key(grok_home: &Path) -> std::io::Result<()> {
+    clear_provider_api_key(grok_home, API_KEY_SCOPE)
 }
 
 #[cfg(test)]
@@ -508,5 +526,44 @@ mod write_fallback_tests {
         let _ = write_auth_json_in_place_with(&path, &sample_store(), fake_truncate_then_fail);
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600, "restored file must stay 0o600");
+    }
+
+    /// A BYOP provider-scoped key must round-trip independently of the xAI
+    /// `xai::api_key` scope — storing one must not clobber or leak into the
+    /// other, since both can coexist in the same auth.json.
+    #[test]
+    fn provider_api_key_round_trips_independently_of_xai_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let grok_home = dir.path();
+        store_api_key(grok_home, "xai-secret").unwrap();
+        let scope = provider_api_key_scope("openai");
+        store_provider_api_key(grok_home, &scope, "openai-secret").unwrap();
+
+        assert_eq!(read_api_key(grok_home).as_deref(), Some("xai-secret"));
+        assert_eq!(
+            read_provider_api_key(grok_home, &scope).as_deref(),
+            Some("openai-secret")
+        );
+
+        clear_provider_api_key(grok_home, &scope).unwrap();
+        assert_eq!(read_provider_api_key(grok_home, &scope), None);
+        assert_eq!(
+            read_api_key(grok_home).as_deref(),
+            Some("xai-secret"),
+            "clearing the BYOP scope must not touch the xAI scope"
+        );
+    }
+
+    /// `provider_api_key_scope` must produce a stable, predictable name so
+    /// operators/tests can reason about auth.json scope keys directly.
+    #[test]
+    fn provider_api_key_scope_naming_is_stable() {
+        assert_eq!(provider_api_key_scope("openai"), "openai::api_key");
+        assert_eq!(provider_api_key_scope("anthropic"), "anthropic::api_key");
+        assert_eq!(
+            provider_api_key_scope("xai"),
+            API_KEY_SCOPE,
+            "the xai provider scope must match the pre-existing xai::api_key constant"
+        );
     }
 }

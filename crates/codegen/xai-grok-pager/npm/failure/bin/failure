@@ -1,0 +1,204 @@
+#!/usr/bin/env node
+// Thin trampoline: resolves the failure binary from the matching per-platform
+// optional dependency package and execs it.
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const zlib = require('zlib');
+
+const pkgName = '@failure-build/failure';
+const IS_WINDOWS = process.platform === 'win32';
+const EXE = IS_WINDOWS ? '.exe' : '';
+const BIN_NAME = `failure${EXE}`;
+const CANONICAL_DIR = path.join(os.homedir(), '.failure', 'bin');
+const CANONICAL_PATH = path.join(CANONICAL_DIR, BIN_NAME);
+
+function readLocalVersion() {
+    try { return require('../package.json').version; } catch { return undefined; }
+}
+
+function resolvePlatformPackageDir() {
+    const platformPkg = `@failure-build/failure-${process.platform}-${process.arch}`;
+    try {
+        return path.dirname(require.resolve(`${platformPkg}/package.json`));
+    } catch {
+        return null;
+    }
+}
+
+function decompressBrotli(brPath, outPath) {
+    const compressed = fs.readFileSync(brPath);
+    const decompressed = zlib.brotliDecompressSync(compressed);
+    const tmp = outPath + `.tmp.${process.pid}`;
+    fs.writeFileSync(tmp, decompressed);
+    if (!IS_WINDOWS) fs.chmodSync(tmp, 0o755);
+    try { fs.renameSync(tmp, outPath); } catch {}
+}
+
+function bootstrapCanonical(sourceBinPath, version) {
+    try {
+        fs.mkdirSync(CANONICAL_DIR, { recursive: true });
+        const versionedName = `failure-${version}${EXE}`;
+        const versionedPath = path.join(CANONICAL_DIR, versionedName);
+        if (!fs.existsSync(versionedPath)) {
+            const tmpPath = versionedPath + `.tmp.${process.pid}`;
+            fs.copyFileSync(sourceBinPath, tmpPath);
+            if (!IS_WINDOWS) fs.chmodSync(tmpPath, 0o755);
+            fs.renameSync(tmpPath, versionedPath);
+        }
+        if (IS_WINDOWS) {
+            const oldPath = CANONICAL_PATH + '.old';
+            try { fs.unlinkSync(oldPath); } catch {}
+            try {
+                try { fs.unlinkSync(CANONICAL_PATH); } catch {}
+                fs.copyFileSync(versionedPath, CANONICAL_PATH);
+            } catch {
+                fs.renameSync(CANONICAL_PATH, oldPath);
+                try {
+                    fs.copyFileSync(versionedPath, CANONICAL_PATH);
+                } catch {
+                    try { fs.renameSync(oldPath, CANONICAL_PATH); } catch {}
+                    throw new Error('locked');
+                }
+            }
+        } else {
+            const tmpLink = CANONICAL_PATH + `.link.${process.pid}`;
+            try { fs.unlinkSync(tmpLink); } catch {}
+            fs.symlinkSync(versionedName, tmpLink);
+            fs.renameSync(tmpLink, CANONICAL_PATH);
+        }
+        return CANONICAL_PATH;
+    } catch {
+        return sourceBinPath;
+    }
+}
+
+function resolveBinary() {
+    if (fs.existsSync(CANONICAL_PATH)) return CANONICAL_PATH;
+
+    const platformDir = resolvePlatformPackageDir();
+    if (!platformDir) {
+        console.error(`${pkgName}: no platform binary installed for ${process.platform}-${process.arch}.`);
+        console.error(`  Expected sibling package @failure-build/failure-${process.platform}-${process.arch}.`);
+        console.error(`  This usually means npm skipped optionalDependencies (e.g. --no-optional)`);
+        console.error(`  or the platform is not supported.`);
+        process.exit(1);
+    }
+
+    const rawPath = path.join(platformDir, 'bin', BIN_NAME);
+    const brPath = rawPath + '.br';
+    if (!fs.existsSync(rawPath) && fs.existsSync(brPath)) {
+        decompressBrotli(brPath, rawPath);
+    }
+    if (!fs.existsSync(rawPath)) {
+        console.error(`${pkgName}: missing binary at ${rawPath}`);
+        process.exit(1);
+    }
+
+    const version = readLocalVersion();
+    return version ? bootstrapCanonical(rawPath, version) : rawPath;
+}
+
+function runPackageUtility() {
+    if (process.argv[2] !== 'mcp-worker') return false;
+    const script = path.join(__dirname, 'cloudflare-worker.js');
+    const child = spawn(process.execPath, [script, ...process.argv.slice(3)], {
+        stdio: 'inherit',
+        env: process.env,
+        windowsHide: true,
+    });
+    child.on('exit', (code, signal) => {
+        if (signal) process.kill(process.pid, signal);
+        else process.exit(code ?? 0);
+    });
+    child.on('error', (error) => {
+        console.error(`${pkgName}: Cloudflare Worker configuration failed: ${error.message}`);
+        process.exit(1);
+    });
+    return true;
+}
+
+if (runPackageUtility()) {
+    return;
+}
+
+function shouldStartMcp() {
+    if (process.env.FAILURE_MCP_CHILD === '1') return false;
+    if (process.env.FAILURE_MCP_ENABLED === '0') return false;
+
+    const first = process.argv[2];
+    const skip = new Set([
+        'completions', 'export', 'inspect', 'login', 'logout', 'mcp', 'mcp-worker',
+        'memory', 'models', 'plugin', 'sessions', 'setup', 'trace', 'update',
+        'version', 'worktree', '--help', '-h', '--version', '-v',
+    ]);
+    return !first || !skip.has(first);
+}
+
+function startNodeSidecar(scriptName, args = []) {
+    const script = path.join(__dirname, scriptName);
+    if (!fs.existsSync(script)) return null;
+    const child = spawn(process.execPath, [script, ...args], {
+        stdio: ['ignore', 'ignore', 'inherit'],
+        env: { ...process.env, FAILURE_BIN: __filename },
+        windowsHide: true,
+    });
+    child.on('error', (error) => {
+        console.error(`${pkgName}: ${scriptName} failed to start: ${error.message}`);
+    });
+    return child;
+}
+
+function startMcpSidecars() {
+    if (!shouldStartMcp()) return [];
+    const sidecars = [];
+    const bridge = startNodeSidecar('mcp-server.js', ['--failure-bin', __filename]);
+    if (bridge) sidecars.push(bridge);
+
+    const workerConfig = path.join(os.homedir(), '.failure', 'cloudflare-worker.json');
+    if (fs.existsSync(workerConfig)) {
+        const workerDaemon = startNodeSidecar('cloudflare-worker-daemon.js');
+        if (workerDaemon) sidecars.push(workerDaemon);
+    }
+    return sidecars;
+}
+
+function forwardedArgs() {
+    const args = process.argv.slice(2);
+    if (
+        process.env.FAILURE_MCP_CHILD === '1'
+        && args.length === 2
+        && args[0] === 'sessions'
+        && args[1] === '--json'
+    ) {
+        return ['sessions', 'list'];
+    }
+    return args;
+}
+
+const execPath = resolveBinary();
+const sidecars = startMcpSidecars();
+const childEnv = { ...process.env, FAILURE_MANAGED_BY_NPM: '1' };
+const child = spawn(execPath, forwardedArgs(), { stdio: 'inherit', env: childEnv });
+
+function stopSidecars() {
+    for (const sidecar of sidecars) {
+        if (sidecar.killed) continue;
+        try { sidecar.kill(); } catch {}
+    }
+}
+
+child.on('exit', (code, signal) => {
+    stopSidecars();
+    if (signal) process.kill(process.pid, signal);
+    else process.exit(code ?? 0);
+});
+child.on('error', (error) => {
+    stopSidecars();
+    console.error(`${pkgName}: failed to launch Failure: ${error.message}`);
+    process.exit(1);
+});
+process.on('SIGINT', stopSidecars);
+process.on('SIGTERM', stopSidecars);
+process.on('exit', stopSidecars);

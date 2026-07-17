@@ -1,20 +1,16 @@
 <div align="center">
 
 <h1>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://media.x.ai/v1/website/spacexai-symbol-white-transparent-0c31957f.png">
-    <source media="(prefers-color-scheme: light)" srcset="https://media.x.ai/v1/website/spacexai-symbol-black-transparent-6435cf42.png">
-    <img alt="SpaceXAI logo" src="https://media.x.ai/v1/website/spacexai-symbol-black-transparent-6435cf42.png" width="96">
-  </picture>
-  <br>
-  Grok Build (<code>grok</code>)
+  Failure Build (<code>failure</code>)
 </h1>
 
-**Grok Build** is SpaceXAI's terminal-based AI coding agent. It runs as a
-full-screen TUI that understands your codebase, edits files, executes shell
-commands, searches the web, and manages long-running tasks — interactively,
-headlessly for scripting/CI, or embedded in editors via the Agent Client
-Protocol (ACP).
+**Failure Build** is a terminal-based AI coding agent, forked from xAI's
+open-sourced Grok Build. It runs as a full-screen TUI that understands your
+codebase, edits files, executes shell commands, searches the web, and
+manages long-running tasks — interactively, headlessly for scripting/CI, or
+embedded in editors via the Agent Client Protocol (ACP). Unlike upstream
+Grok Build, Failure Build is bring-your-own-provider: x.ai's Grok models,
+OpenAI, Anthropic, Ollama, or any custom OpenAI-compatible endpoint.
 
 [Installing the released binary](#installing-the-released-binary) ·
 [Building from source](#building-from-source) ·
@@ -24,15 +20,11 @@ Protocol (ACP).
 [Contributing](#contributing) ·
 [License](#license)
 
-![Grok Build TUI](https://media.x.ai/v1/website/universe-tui-screenshot-6f7a0837.png)
+<!-- TODO: project logo/screenshot goes here once this fork has its own assets -->
 
-**Learn more about Grok Build at [x.ai/cli](https://x.ai/cli)**
-
-This repository contains the Rust source for the `grok` CLI/TUI and its agent
-runtime. It is synced periodically from the SpaceXAI monorepo.
-
-A small `SOURCE_REV` file at the root records the full monorepo commit SHA
-for the version of the code present in this tree.
+This repository contains the Rust source for the `failure` CLI/TUI and its
+agent runtime, forked from the `SOURCE_REV` monorepo commit of xAI's Grok
+Build recorded at the repository root.
 
 </div>
 
@@ -40,16 +32,13 @@ for the version of the code present in this tree.
 
 ## Installing the released binary
 
-Prebuilt binaries are published for macOS, Linux, and Windows:
-
-```sh
-curl -fsSL https://x.ai/cli/install.sh | bash   # macOS / Linux / Git Bash
-irm https://x.ai/cli/install.ps1 | iex          # Windows PowerShell
-grok --version
-```
-
-See the [changelog](https://x.ai/build/changelog) for the latest fixes,
-features, and improvements in each release.
+Prebuilt binaries aren't hosted for this fork yet — see
+[Building from source](#building-from-source) below.
+[`crates/codegen/xai-grok-pager/scripts/install.sh`](crates/codegen/xai-grok-pager/scripts/install.sh)
+and its `install-enterprise.sh` sibling are rebranded and ready to use once
+release artifacts are published somewhere this fork controls; today they
+still point at upstream xAI's install infrastructure, which serves the
+upstream `grok` binary, not `failure`.
 
 ## Building from source
 
@@ -79,13 +68,16 @@ cargo check -p xai-grok-pager-bin            # fast validation
 ```
 
 The binary artifact is named `xai-grok-pager`; official installs ship it as
-`grok`. On first launch it opens your browser to authenticate — see the
+`failure`. On first launch, pick a provider (x.ai, OpenAI, Anthropic,
+Ollama, or a custom endpoint) — see the
 [authentication guide](crates/codegen/xai-grok-pager/docs/user-guide/02-authentication.md).
 
 ## Documentation
 
-Full online documentation is available at
-[docs.x.ai/build/overview](https://docs.x.ai/build/overview).
+This fork's user guide is the authoritative documentation (below).
+[docs.x.ai/build/overview](https://docs.x.ai/build/overview) is xAI's
+upstream Grok Build documentation — useful background on shared concepts,
+but it describes the upstream product and may not match this fork.
 
 The user guide ships with the pager crate:
 [`crates/codegen/xai-grok-pager/docs/user-guide/`](crates/codegen/xai-grok-pager/docs/user-guide/)

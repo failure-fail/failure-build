@@ -5,7 +5,7 @@ use toml::Value as TomlValue;
 use toml::map::Map as TomlMap;
 use xai_grok_agent::prompt::skills::SkillsConfig;
 
-/// Process-wide write lock for `~/.grok/config.toml`.
+/// Process-wide write lock for `~/.failure/config.toml`.
 ///
 /// Serializes the read-modify-write in `save_config` so two rapid
 /// settings toggles can't interleave and clobber each other.
@@ -423,7 +423,7 @@ mod tests {
         ui.insert("show_timestamps".into(), TomlValue::Boolean(true));
         ui.insert(
             "auto_light_theme".into(),
-            TomlValue::String("grokday".into()),
+            TomlValue::String("failureday".into()),
         );
         table.insert("ui".into(), TomlValue::Table(ui));
 
@@ -446,7 +446,7 @@ mod tests {
         );
         assert_eq!(
             ui.get("auto_light_theme").and_then(|v| v.as_str()),
-            Some("grokday"),
+            Some("failureday"),
             "pre-existing field not in serialized output should be preserved"
         );
     }
@@ -619,7 +619,7 @@ mod tests {
 yolo = true
 show_timestamps = false
 auto_dark_theme = "tokyonight"
-auto_light_theme = "grokday"
+auto_light_theme = "failureday"
 "#;
         let root: TomlValue = toml::from_str(toml_str).unwrap();
         let cfg = load_config_from_toml(&root);
@@ -627,7 +627,7 @@ auto_light_theme = "grokday"
         assert!(cfg.ui.yolo);
         assert_eq!(cfg.ui.show_timestamps, Some(false));
         assert_eq!(cfg.ui.auto_dark_theme.as_deref(), Some("tokyonight"));
-        assert_eq!(cfg.ui.auto_light_theme.as_deref(), Some("grokday"));
+        assert_eq!(cfg.ui.auto_light_theme.as_deref(), Some("failureday"));
 
         // Simulate save_config: serialize back through merge_section
         let mut table = root.as_table().unwrap().clone();
@@ -644,7 +644,7 @@ auto_light_theme = "grokday"
         );
         assert_eq!(
             ui.get("auto_light_theme").and_then(|v| v.as_str()),
-            Some("grokday")
+            Some("failureday")
         );
         assert_eq!(ui.get("yolo").and_then(|v| v.as_bool()), Some(true));
     }
@@ -730,7 +730,7 @@ auto_light_theme = "grokday"
 [ui]
 show_timestamps = true
 auto_dark_theme = "tokyonight"
-auto_light_theme = "grokday"
+auto_light_theme = "failureday"
 
 [models]
 default = "grok-3"
@@ -763,7 +763,7 @@ auto_update = true
         );
         assert_eq!(
             ui.get("auto_light_theme").and_then(|v| v.as_str()),
-            Some("grokday")
+            Some("failureday")
         );
 
         // Verify the model change went through
@@ -1117,7 +1117,7 @@ auto_update = true
         const TEST_MODEL: &str = "grok-4.5";
         const OTHER_MODEL: &str = "grok-4.3";
 
-        /// Serialize tests that mutate `GROK_AUTO_COMPACT_THRESHOLD_PERCENT`.
+        /// Serialize tests that mutate `FAILURE_AUTO_COMPACT_THRESHOLD_PERCENT`.
         static ENV_LOCK: Mutex<()> = Mutex::new(());
 
         /// Build a `Config` populated with optional per-source values for the
@@ -1405,7 +1405,12 @@ auto_update = true
                 auto_compact_threshold_percent: Some(42),
                 ..ConfigModelOverride::default()
             };
-            let merged = over.apply(TEST_MODEL, Some(base), &endpoints);
+            let merged = over.apply(
+                TEST_MODEL,
+                Some(base),
+                &endpoints,
+                &crate::agent::config::default_provider_entries(),
+            );
             assert_eq!(
                 merged.info.auto_compact_threshold_percent, None,
                 "ConfigModelOverride::apply must NOT merge `auto_compact_threshold_percent` \
@@ -1451,8 +1456,8 @@ auto_update = true
         // `cfg.ui.auto_{dark,light}_theme = Some(value)`.
         let cfg = apply(|cfg| cfg.ui.auto_dark_theme = Some("tokyonight".to_string()));
         assert_eq!(cfg.ui.auto_dark_theme, Some("tokyonight".to_string()));
-        let cfg = apply(|cfg| cfg.ui.auto_light_theme = Some("grokday".to_string()));
-        assert_eq!(cfg.ui.auto_light_theme, Some("grokday".to_string()));
+        let cfg = apply(|cfg| cfg.ui.auto_light_theme = Some("failureday".to_string()));
+        assert_eq!(cfg.ui.auto_light_theme, Some("failureday".to_string()));
 
         // set_hunk_tracker_mode wraps `cfg.ui.hunk_tracker_mode = Some(value)`.
         let cfg = apply(|cfg| cfg.ui.hunk_tracker_mode = Some("off".to_string()));
@@ -1473,7 +1478,7 @@ auto_update = true
         let original = r#"
 [ui]
 compact_mode = true
-theme = "groknight"
+theme = "failurenight"
 auto_dark_theme = "tokyonight"
 custom_user_key = "preserve-me"
 "#;
@@ -1514,8 +1519,8 @@ custom_user_key = "preserve-me"
         let original = r#"
 [ui]
 theme = "auto"
-auto_dark_theme = "groknight"
-auto_light_theme = "grokday"
+auto_dark_theme = "failurenight"
+auto_light_theme = "failureday"
 custom_unknown_key = 42
 "#;
         let root: TomlValue = toml::from_str(original).unwrap();

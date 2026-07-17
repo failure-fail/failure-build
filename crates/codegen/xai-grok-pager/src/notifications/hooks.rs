@@ -14,13 +14,13 @@ fn execute_hook(
     let mut cmd = Command::new("sh");
     cmd.arg("-c")
         .arg(command)
-        .env("GROK_EVENT", event_str)
-        .env("GROK_MESSAGE", message)
+        .env("FAILURE_EVENT", event_str)
+        .env("FAILURE_MESSAGE", message)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     if let Some(sid) = session_id {
-        cmd.env("GROK_SESSION_ID", sid);
+        cmd.env("FAILURE_SESSION_ID", sid);
     }
 
     // Create a new process group so we can kill the entire tree on timeout,
@@ -105,8 +105,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("env.txt");
         let command = format!(
-            "printf 'GROK_EVENT=%s\\nGROK_MESSAGE=%s\\nGROK_SESSION_ID=%s\\n' \
-             \"$GROK_EVENT\" \"$GROK_MESSAGE\" \"$GROK_SESSION_ID\" > {}",
+            "printf 'FAILURE_EVENT=%s\\nFAILURE_MESSAGE=%s\\nFAILURE_SESSION_ID=%s\\n' \
+             \"$FAILURE_EVENT\" \"$FAILURE_MESSAGE\" \"$FAILURE_SESSION_ID\" > {}",
             out.display()
         );
 
@@ -120,16 +120,16 @@ mod tests {
 
         let content = std::fs::read_to_string(&out).unwrap();
         assert!(
-            content.contains("GROK_EVENT=Turn complete"),
-            "missing GROK_EVENT: {content}"
+            content.contains("FAILURE_EVENT=Turn complete"),
+            "missing FAILURE_EVENT: {content}"
         );
         assert!(
-            content.contains("GROK_MESSAGE=hello world"),
-            "missing GROK_MESSAGE: {content}"
+            content.contains("FAILURE_MESSAGE=hello world"),
+            "missing FAILURE_MESSAGE: {content}"
         );
         assert!(
-            content.contains("GROK_SESSION_ID=sess-42"),
-            "missing GROK_SESSION_ID: {content}"
+            content.contains("FAILURE_SESSION_ID=sess-42"),
+            "missing FAILURE_SESSION_ID: {content}"
         );
     }
 
@@ -149,8 +149,8 @@ mod tests {
 
         let content = std::fs::read_to_string(&out).unwrap();
         assert!(
-            !content.contains("GROK_SESSION_ID"),
-            "GROK_SESSION_ID should not be set: {content}"
+            !content.contains("FAILURE_SESSION_ID"),
+            "FAILURE_SESSION_ID should not be set: {content}"
         );
     }
 
@@ -257,8 +257,8 @@ mod tests {
         let out = dir.path().join("env.txt");
         let hook = NotificationHook {
             command: format!(
-                "printf 'GROK_EVENT=%s\\nGROK_MESSAGE=%s\\nGROK_SESSION_ID=%s\\n' \
-                 \"$GROK_EVENT\" \"$GROK_MESSAGE\" \"$GROK_SESSION_ID\" > {}",
+                "printf 'FAILURE_EVENT=%s\\nFAILURE_MESSAGE=%s\\nFAILURE_SESSION_ID=%s\\n' \
+                 \"$FAILURE_EVENT\" \"$FAILURE_MESSAGE\" \"$FAILURE_SESSION_ID\" > {}",
                 out.display()
             ),
             events: vec![],
@@ -281,8 +281,8 @@ mod tests {
             );
             std::thread::sleep(Duration::from_millis(50));
         };
-        assert!(content.contains("GROK_EVENT=Turn complete"));
-        assert!(content.contains("GROK_MESSAGE=test body payload"));
-        assert!(content.contains("GROK_SESSION_ID=test-session-123"));
+        assert!(content.contains("FAILURE_EVENT=Turn complete"));
+        assert!(content.contains("FAILURE_MESSAGE=test body payload"));
+        assert!(content.contains("FAILURE_SESSION_ID=test-session-123"));
     }
 }

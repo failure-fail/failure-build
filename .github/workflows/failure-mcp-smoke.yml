@@ -1,0 +1,46 @@
+name: Failure MCP smoke
+
+on:
+  push:
+    branches:
+      - claude/grok-rebrand-reskin-0jgqqy
+    paths:
+      - "crates/codegen/xai-grok-pager/npm/failure/**"
+      - "crates/codegen/xai-grok-pager-bin/**"
+      - "crates/codegen/xai-grok-pager/src/app/cli.rs"
+      - ".github/workflows/failure-mcp-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: crates/codegen/xai-grok-pager/npm/failure
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run MCP and Cloudflare Worker tests
+        run: npm run test:mcp
+      - name: Verify npm package contents
+        run: npm pack --dry-run
+
+  native-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Install DotSlash
+        run: cargo install dotslash --locked
+      - name: Check native Failure app
+        run: cargo check -p xai-grok-pager-bin

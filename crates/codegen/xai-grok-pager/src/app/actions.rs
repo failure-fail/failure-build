@@ -296,12 +296,12 @@ pub enum Action {
     /// scrollback pane is focused.
     ToggleMouseCapture,
     /// Toggle the scroll-diagnostics HUD (hidden `/scroll-debug` command,
-    /// also `/debug scroll`; `GROK_SCROLL_DEBUG=1` enables it from startup).
+    /// also `/debug scroll`; `FAILURE_SCROLL_DEBUG=1` enables it from startup).
     ToggleScrollDebugHud,
     /// Toggle the release-safe FPS HUD (`/debug fps`).
     ToggleFpsHud,
     /// Toggle the scroll flight recorder at runtime (`/debug log`;
-    /// `GROK_SCROLL_LOG=1` enables it from startup).
+    /// `FAILURE_SCROLL_LOG=1` enables it from startup).
     ToggleScrollLog,
     /// Print the `/debug` toggles and their on/off state to the transcript.
     ShowDebugStatus,
@@ -522,7 +522,7 @@ pub enum Action {
     SetContextualHintSendNow(bool),
     SetContextualHintSmallScreen(bool),
     SetContextualHintWordSelect(bool),
-    /// Commit the active theme (canonical name, e.g. `"groknight"`, `"auto"`).
+    /// Commit the active theme (canonical name, e.g. `"failurenight"`, `"auto"`).
     SetTheme(String),
     /// Commit the theme used when the OS is in dark mode. Only updates
     /// the live display when `theme = "auto"` AND system is in dark mode.
@@ -957,7 +957,7 @@ pub enum Action {
 }
 /// Persist-and-notify semantics for [`Effect::PersistPermissionMode`].
 ///
-/// Both variants write to `~/.grok/config.toml` and route ACP
+/// Both variants write to `~/.failure/config.toml` and route ACP
 /// `x.ai/yolo_mode_changed` notifications. The ACP notification is
 /// gated on disk-write success when `WithRollback` is used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1523,7 +1523,7 @@ pub enum Effect {
     PersistMemoryFullscreen { fullscreen: bool },
     /// Persist the project-picker opt-out to `[hints] project_picker_disabled`.
     PersistProjectPickerDisabled { disabled: bool },
-    /// Persist the dashboard's `[dashboard]` configuration to `~/.grok/config.toml`.
+    /// Persist the dashboard's `[dashboard]` configuration to `~/.failure/config.toml`.
     /// Edge case 15: multi-pager safe via `config_toml_edit::read_config_document_for_edit`,
     /// which loads → modifies → writes the whole document. Concurrent
     /// pagers may produce last-writer-wins behaviour but never corrupt
@@ -1549,7 +1549,7 @@ pub enum Effect {
         session_id: Option<acp::SessionId>,
         persist: PermissionModePersist,
     },
-    /// Persist a typed setting to `~/.grok/config.toml`. On failure,
+    /// Persist a typed setting to `~/.failure/config.toml`. On failure,
     /// rolls the in-memory cache back to `rollback_value`.
     PersistSetting {
         key: crate::settings::SettingKey,
@@ -1895,7 +1895,7 @@ pub enum Effect {
     /// Clear the "copied!" feedback after a delay.
     ScheduleClearAuthCopied,
     /// Register the current session in the active-sessions crash-recovery
-    /// registry (`~/.grok/active_sessions.json`).
+    /// registry (`~/.failure/active_sessions.json`).
     RegisterActiveSession {
         session_id: acp::SessionId,
         cwd: String,

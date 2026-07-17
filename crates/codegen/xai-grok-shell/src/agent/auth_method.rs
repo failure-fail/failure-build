@@ -27,19 +27,32 @@ pub const XAI_API_KEY_ENV_VAR: &str = "XAI_API_KEY";
 
 /// Legacy env var name. Checked as a fallback when `XAI_API_KEY` is not set,
 /// so existing deployments that use the old name keep working.
-pub const LEGACY_XAI_API_KEY_ENV_VAR: &str = "GROK_CODE_XAI_API_KEY";
+pub const LEGACY_XAI_API_KEY_ENV_VAR: &str = "FAILURE_CODE_XAI_API_KEY";
 
 /// Read the API key from the environment.
 ///
 /// Checks `XAI_API_KEY` first, then falls back to the legacy
-/// `GROK_CODE_XAI_API_KEY` for backward compatibility.
+/// `FAILURE_CODE_XAI_API_KEY` for backward compatibility.
 pub fn read_xai_api_key_env() -> Result<String, std::env::VarError> {
     std::env::var(XAI_API_KEY_ENV_VAR).or_else(|_| std::env::var(LEGACY_XAI_API_KEY_ENV_VAR))
 }
 
-/// Returns `true` if either `XAI_API_KEY` or `GROK_CODE_XAI_API_KEY` is set.
+/// Returns `true` if either `XAI_API_KEY` or `FAILURE_CODE_XAI_API_KEY` is set.
 pub fn has_xai_api_key_env() -> bool {
     read_xai_api_key_env().is_ok()
+}
+
+/// Blessed global env var name for a BYOP provider, e.g. `openai` ->
+/// `FAILURE_OPENAI_API_KEY`. Mirrors `XAI_API_KEY`'s convenience for any
+/// named `[provider.*]` — no per-model `env_key` config required.
+pub fn provider_api_key_env_var(provider: &str) -> String {
+    format!("FAILURE_{}_API_KEY", provider.to_uppercase())
+}
+
+/// Read the blessed global env var for a BYOP provider (see
+/// [`provider_api_key_env_var`]).
+pub fn read_provider_api_key_env(provider: &str) -> Result<String, std::env::VarError> {
+    std::env::var(provider_api_key_env_var(provider))
 }
 
 /// Whether `xai.api_key` should be advertised (and pushed FIRST) when building
@@ -57,7 +70,7 @@ pub fn has_xai_api_key_env() -> bool {
 /// result is not cached.
 ///
 /// `disable_api_key_auth` (`[grok_com_config] disable_api_key_auth` /
-/// `GROK_DISABLE_API_KEY_AUTH`) is the admin kill switch: when true the
+/// `FAILURE_DISABLE_API_KEY_AUTH`) is the admin kill switch: when true the
 /// method is never advertised, regardless of available credentials, so
 /// `XAI_API_KEY` can't bypass a deployment's forced IdP login.
 pub fn should_advertise_xai_api_key<'a, I>(disable_api_key_auth: bool, models: I) -> bool
@@ -299,7 +312,7 @@ impl AuthMethodKind {
         match id.0.as_ref() {
             XAI_API_KEY_METHOD_ID => Self::XaiApiKey,
             CACHED_TOKEN_AUTH_METHOD_ID => Self::CachedToken,
-            GROK_COM_METHOD_ID => Self::GrokCom,
+            FAILURE_COM_METHOD_ID => Self::GrokCom,
             OIDC_METHOD_ID => Self::Oidc,
             _ => Self::Unknown,
         }
@@ -390,7 +403,7 @@ pub fn session_token_auth_gate(
 pub const AUTH_ERROR_SESSION_EXPIRED: &str =
     "Session expired. Run `grok login` to re-authenticate.";
 
-pub const AUTH_ERROR_API_KEY: &str = "Authentication failed. Run `grok login`, set XAI_API_KEY, or add api_key to ~/.grok/config.toml.";
+pub const AUTH_ERROR_API_KEY: &str = "Authentication failed. Run `grok login`, set XAI_API_KEY, or add api_key to ~/.failure/config.toml.";
 
 /// Next ACP method id when `cached_token` cannot proceed (missing / expired /
 /// legacy WebLogin), or `None` when fallthrough is forbidden.
@@ -410,7 +423,7 @@ pub fn method_id_after_cached_token_unavailable(
         None => Some(if has_external_api_key {
             XAI_API_KEY_METHOD_ID
         } else {
-            GROK_COM_METHOD_ID
+            FAILURE_COM_METHOD_ID
         }),
     }
 }
@@ -442,11 +455,11 @@ pub fn cached_token_auth_method() -> acp::AuthMethod {
             acp::AuthMethodId::new(CACHED_TOKEN_AUTH_METHOD_ID),
             "cached_token".to_string(),
         )
-        .description(Some("Cached token from ~/.grok/auth.json".to_string())),
+        .description(Some("Cached token from ~/.failure/auth.json".to_string())),
     )
 }
 
-pub const GROK_COM_METHOD_ID: &str = "grok.com";
+pub const FAILURE_COM_METHOD_ID: &str = "grok.com";
 
 /// xAI OAuth2/OIDC auth. Method id `"grok.com"` kept for ACP wire-compat.
 pub fn grok_com_auth_method(
@@ -462,7 +475,7 @@ pub fn grok_com_auth_method(
         None
     };
     acp::AuthMethod::Agent(
-        acp::AuthMethodAgent::new(acp::AuthMethodId::new(GROK_COM_METHOD_ID), name.to_string())
+        acp::AuthMethodAgent::new(acp::AuthMethodId::new(FAILURE_COM_METHOD_ID), name.to_string())
             .description(Some(format!("Sign in with {name}")))
             .meta(meta),
     )
@@ -505,7 +518,7 @@ mod tests {
     fn after_cached_token_unavailable_falls_to_grok_com_without_api_key() {
         assert_eq!(
             method_id_after_cached_token_unavailable(false, None),
-            Some(GROK_COM_METHOD_ID),
+            Some(FAILURE_COM_METHOD_ID),
         );
     }
 
@@ -527,7 +540,7 @@ mod tests {
     fn auth_method_kind_classifier_matrix() {
         let session_methods = [
             CACHED_TOKEN_AUTH_METHOD_ID,
-            GROK_COM_METHOD_ID,
+            FAILURE_COM_METHOD_ID,
             OIDC_METHOD_ID,
         ];
         for method_id in session_methods {
@@ -752,7 +765,7 @@ mod tests {
     // ── End-to-end: enterprise TOML -> resolved models -> build_auth_methods ─
 
     /// END-TO-END REGRESSION TEST: parses the literal enterprise-style
-    /// `~/.grok/config.toml` skeleton from the bug report, walks it through
+    /// `~/.failure/config.toml` skeleton from the bug report, walks it through
     /// the same predicate (`should_advertise_xai_api_key`) and the same
     /// list-builder (`build_auth_methods`) that `MvpAgent::initialize()` uses
     /// in production, and asserts that `auth_methods.first()` is `xai.api_key`
@@ -893,7 +906,7 @@ mod tests {
         assert!(built.default_auth_method_id.is_none());
     }
 
-    /// Legacy `GROK_CODE_XAI_API_KEY` env var is accepted as a fallback
+    /// Legacy `FAILURE_CODE_XAI_API_KEY` env var is accepted as a fallback
     /// when `XAI_API_KEY` is not set, ensuring existing deployments keep working.
     #[test]
     #[serial]
@@ -909,7 +922,7 @@ mod tests {
         assert!(has_external_api_key);
     }
 
-    /// When both `XAI_API_KEY` and `GROK_CODE_XAI_API_KEY` are set,
+    /// When both `XAI_API_KEY` and `FAILURE_CODE_XAI_API_KEY` are set,
     /// the new name takes precedence.
     #[test]
     #[serial]
@@ -923,7 +936,7 @@ mod tests {
     //
     // `grok login --legacy` produces a GrokAuth with `auth_mode: WebLogin`,
     // `oidc_issuer: None`, and no `expires_at` (30-day hardcoded TTL).
-    // When this token is present via the `GROK_AUTH` env var (or via legacy
+    // When this token is present via the `FAILURE_AUTH` env var (or via legacy
     // scope fallback in auth.json), `AuthManager::new` returns it from
     // `current()`, feeding `has_cached_token = true` into `build_auth_methods`.
     // This puts `cached_token` first so `startup_auth_metadata()` returns
@@ -931,11 +944,11 @@ mod tests {
     // screen.
     //
     // This test pins the env-var path (highest priority in AuthManager) end-
-    // to-end. A regression in GROK_AUTH JSON parsing or in auth method
+    // to-end. A regression in FAILURE_AUTH JSON parsing or in auth method
     // ordering would send legacy-token users to the login screen.
 
     /// END-TO-END REGRESSION TEST: a legacy auth token (WebLogin, no
-    /// expires_at) present in the `GROK_AUTH` env var, with no other auth
+    /// expires_at) present in the `FAILURE_AUTH` env var, with no other auth
     /// available, MUST be loaded by `AuthManager` and cause `build_auth_methods`
     /// to advertise `cached_token` first. The pager therefore skips the login
     /// screen (frictionless legacy auth). This behavior works; the test
@@ -946,7 +959,7 @@ mod tests {
         use crate::auth::{AuthManager, AuthMode, GrokAuth, GrokComConfig};
 
         // Ensure clean slate for "no other auth available".
-        let _g1 = EnvGuard::unset("GROK_AUTH_PATH");
+        let _g1 = EnvGuard::unset("FAILURE_AUTH_PATH");
         let _g2 = EnvGuard::unset(XAI_API_KEY_ENV_VAR);
 
         // Construct a legacy-style token exactly as `grok login --legacy`
@@ -965,11 +978,11 @@ mod tests {
             ..GrokAuth::test_default()
         };
 
-        // Provide it via GROK_AUTH env var (highest priority code path in
+        // Provide it via FAILURE_AUTH env var (highest priority code path in
         // AuthManager::new). This is the "legacy auth token exists in the env"
         // case with no other auth.
         let legacy_json = serde_json::to_string(&legacy_token).expect("serialize legacy token");
-        let _g = EnvGuard::set("GROK_AUTH", &legacy_json);
+        let _g = EnvGuard::set("FAILURE_AUTH", &legacy_json);
 
         // AuthManager picks it up from the env var directly (no file needed).
         let dir = tempfile::tempdir().unwrap();
@@ -978,7 +991,7 @@ mod tests {
         let current = mgr.current();
         assert!(
             current.is_some(),
-            "legacy token in GROK_AUTH env MUST be loaded directly -- if this fails, \
+            "legacy token in FAILURE_AUTH env MUST be loaded directly -- if this fails, \
              users with legacy auth in env would be sent to the login screen",
         );
         assert_eq!(
@@ -1029,8 +1042,8 @@ mod tests {
     fn no_legacy_token_means_no_cached_token_advertised() {
         use crate::auth::{AuthManager, GrokComConfig};
 
-        let _g1 = EnvGuard::unset("GROK_AUTH");
-        let _g2 = EnvGuard::unset("GROK_AUTH_PATH");
+        let _g1 = EnvGuard::unset("FAILURE_AUTH");
+        let _g2 = EnvGuard::unset("FAILURE_AUTH_PATH");
 
         let dir = tempfile::tempdir().unwrap();
         // No auth.json in the tempdir.
@@ -1086,7 +1099,7 @@ mod tests {
         });
         assert_eq!(
             method_ids(&built),
-            vec![CACHED_TOKEN_AUTH_METHOD_ID, GROK_COM_METHOD_ID]
+            vec![CACHED_TOKEN_AUTH_METHOD_ID, FAILURE_COM_METHOD_ID]
         );
         assert_eq!(default_id(&built), Some(CACHED_TOKEN_AUTH_METHOD_ID));
     }
@@ -1099,7 +1112,7 @@ mod tests {
             preferred_method: Some(PreferredAuthMethod::Oidc),
             ..default_inputs()
         });
-        assert_eq!(method_ids(&built), vec![GROK_COM_METHOD_ID]);
+        assert_eq!(method_ids(&built), vec![FAILURE_COM_METHOD_ID]);
         assert!(built.default_auth_method_id.is_none());
     }
 }

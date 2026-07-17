@@ -2,12 +2,12 @@
 //!
 //! Merge order (lowest → highest priority):
 //! 1. `/etc/grok/managed_config.toml`
-//! 2. `$GROK_HOME/managed_config.toml`
-//! 3. `$GROK_HOME/config.toml`
-//! 4. `$GROK_HOME/requirements.toml` (cloud cache; Ed25519-signed at rest once a
+//! 2. `$FAILURE_HOME/managed_config.toml`
+//! 3. `$FAILURE_HOME/config.toml`
+//! 4. `$FAILURE_HOME/requirements.toml` (cloud cache; Ed25519-signed at rest once a
 //!    key is embedded — see [`signed_policy`] — below the OS-protected layers)
 //! 5. `/etc/grok/requirements.toml`
-//! 6. macOS MDM managed preferences (`ai.x.grok`, admin-forced) — macOS only
+//! 6. macOS MDM managed preferences (`fail.failure.build`, admin-forced) — macOS only
 //!
 //! Each layer applies its own [`[[version_overrides]]`](version_overrides)
 //! before merge. Requirements layers (#4–#6) may opt into fail-closed startup;

@@ -15,7 +15,7 @@
 use indexmap::IndexMap;
 use serde::Serialize;
 
-use super::config::ConfigModelOverride;
+use super::config::{ConfigModelOverride, ProviderConfig};
 
 /// Category for a [`ModelOverrideWarning`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -92,6 +92,74 @@ pub(crate) fn parse_model_overrides(raw_config: &toml::Value) -> ParsedModelOver
         models.insert(model_key.clone(), entry);
     }
     ParsedModelOverrides { models, warnings }
+}
+
+/// Result of [`parse_provider_overrides`].
+pub(crate) struct ParsedProviderOverrides {
+    pub providers: IndexMap<String, ProviderConfig>,
+    pub warnings: Vec<ModelOverrideWarning>,
+}
+
+/// Parses every `[provider.<name>]` entry in `raw_config`. Simpler than
+/// [`parse_model_overrides`] — no legacy-alias handling — but keeps the same
+/// warn-don't-drop discipline: an entry that fails to parse is dropped with
+/// one warning rather than silently discarded or panicking.
+pub(crate) fn parse_provider_overrides(raw_config: &toml::Value) -> ParsedProviderOverrides {
+    let mut providers = IndexMap::new();
+    let mut warnings = Vec::new();
+    let Some(section) = raw_config.get("provider") else {
+        return ParsedProviderOverrides { providers, warnings };
+    };
+    let Some(table) = section.as_table() else {
+        warnings.push(ModelOverrideWarning {
+            model_key: None,
+            field: None,
+            kind: ModelOverrideWarningKind::NotATable,
+            reason: format!(
+                "`provider` must be a table of [provider.<name>] entries, got {}; all provider overrides ignored",
+                section.type_str()
+            ),
+        });
+        return ParsedProviderOverrides { providers, warnings };
+    };
+    for (provider_name, value) in table {
+        let Some(entry_table) = value.as_table() else {
+            warnings.push(ModelOverrideWarning {
+                model_key: Some(provider_name.clone()),
+                field: None,
+                kind: ModelOverrideWarningKind::NotATable,
+                reason: format!(
+                    "expected a table like [provider.\"{provider_name}\"], got {}; entry dropped",
+                    value.type_str()
+                ),
+            });
+            continue;
+        };
+        let mut unknown = Vec::new();
+        match serde_ignored::deserialize::<_, _, ProviderConfig>(
+            toml::Value::Table(entry_table.clone()),
+            |path| unknown.push(path.to_string()),
+        ) {
+            Ok(entry) => {
+                warnings.extend(unknown.into_iter().map(|field| ModelOverrideWarning {
+                    model_key: Some(provider_name.clone()),
+                    field: Some(field),
+                    kind: ModelOverrideWarningKind::UnknownField,
+                    reason: "unknown field".to_owned(),
+                }));
+                providers.insert(provider_name.clone(), entry);
+            }
+            Err(error) => {
+                warnings.push(ModelOverrideWarning {
+                    model_key: Some(provider_name.clone()),
+                    field: None,
+                    kind: ModelOverrideWarningKind::UnparseableEntry,
+                    reason: format!("failed to parse provider entry ({error}); entry dropped"),
+                });
+            }
+        }
+    }
+    ParsedProviderOverrides { providers, warnings }
 }
 
 /// Logs the warnings when they differ from the previous parse, so a
@@ -268,6 +336,7 @@ fn field_parse_error(field: &str, value: &toml::Value) -> Option<toml::de::Error
 mod tests {
     use super::*;
     use crate::sampling::ApiBackend;
+    use xai_grok_sampler::AuthScheme;
     use xai_grok_sampling_types::{
         CompactionAtTokens, CompactionsRemaining, ReasoningEffort, ReasoningEffortOption,
     };
@@ -536,6 +605,8 @@ mod tests {
             compaction_at_tokens: Some(CompactionAtTokens::Fixed(100_000)),
             show_model_fingerprint: Some(true),
             stream_tool_calls: Some(false),
+            provider: Some("openai".into()),
+            auth_scheme: Some(AuthScheme::XApiKey),
         }
     }
 

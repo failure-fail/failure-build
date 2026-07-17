@@ -68,6 +68,38 @@ fn apply_agent_endpoint_args(
         config.endpoints.xai_api_base_url = v.clone();
     }
 }
+/// Apply `--provider`/`--api-key`/`--base-url` from the CLI into an in-memory
+/// `[model.<key>]` override for this invocation. Ephemeral — not persisted;
+/// `failure login --provider <name> --api-key <key>` is the explicit persist
+/// path. Must run after `apply_agent_endpoint_args` and before anything reads
+/// `config.default_model_override` (model catalog snapshot, auth-method
+/// advertising), and after the earlier plain `--model` assignment so this
+/// wins when both are present.
+fn apply_agent_provider_args(agent_args: &xai_grok_pager::app::AgentArgs, config: &mut AgentConfig) {
+    if agent_args.provider.is_none() && agent_args.api_key.is_none() && agent_args.base_url.is_none()
+    {
+        return;
+    }
+    let key = agent_args
+        .model
+        .clone()
+        .or_else(|| agent_args.provider.clone())
+        .unwrap_or_else(|| "byop".to_string());
+    let entry = config.config_models.entry(key.clone()).or_default();
+    if let Some(provider) = &agent_args.provider {
+        entry.provider = Some(provider.clone());
+    }
+    if let Some(model) = &agent_args.model {
+        entry.model.get_or_insert_with(|| model.clone());
+    }
+    if let Some(k) = &agent_args.api_key {
+        entry.api_key = Some(k.clone());
+    }
+    if let Some(u) = &agent_args.base_url {
+        entry.base_url = Some(u.clone());
+    }
+    config.default_model_override = Some(key);
+}
 /// Resolve --agent-profile path: canonicalize and verify the file exists.
 fn resolve_agent_profile_path(path: &std::path::Path) -> std::path::PathBuf {
     match dunce::canonicalize(path) {
@@ -158,13 +190,13 @@ async fn run_setup_command(json: bool) {
         eprintln!("or set a deployment key:");
         eprintln!();
         if cfg!(unix) {
-            eprintln!("  export GROK_DEPLOYMENT_KEY=<your-key>");
+            eprintln!("  export FAILURE_DEPLOYMENT_KEY=<your-key>");
         } else {
-            eprintln!("  $env:GROK_DEPLOYMENT_KEY=\"<your-key>\"");
+            eprintln!("  $env:FAILURE_DEPLOYMENT_KEY=\"<your-key>\"");
         }
         eprintln!("  grok setup");
         eprintln!();
-        eprintln!("Or add the key to ~/.grok/config.toml:");
+        eprintln!("Or add the key to ~/.failure/config.toml:");
         eprintln!();
         eprintln!("  [endpoints]");
         eprintln!("  deployment_key = \"<your-key>\"");
@@ -365,7 +397,7 @@ fn ensure_control_caps(reg: &LeaderRegistration) -> Result<&LeaderCapabilities> 
 }
 /// Env override for the `grok workspace` gate: any truthy value enables the
 /// command locally, a falsy one disables it — bypassing the remote settings flag.
-const WORKSPACE_COMMAND_ENV: &str = "GROK_WORKSPACE_COMMAND";
+const WORKSPACE_COMMAND_ENV: &str = "FAILURE_WORKSPACE_COMMAND";
 /// Resolution of the `grok workspace` gate. `Unknown` is kept separate from
 /// `Disabled` so we don't tell the user the flag is off when the settings were
 /// simply never read (both fail closed, but `Unknown` earns an honest message).
@@ -375,7 +407,7 @@ enum WorkspaceGate {
     Disabled,
     Unknown,
 }
-/// The `GROK_WORKSPACE_COMMAND` override, if set (`Some(true)`/`Some(false)`);
+/// The `FAILURE_WORKSPACE_COMMAND` override, if set (`Some(true)`/`Some(false)`);
 /// `None` defers to the remote settings flag.
 fn workspace_command_env_override() -> Option<bool> {
     std::env::var(WORKSPACE_COMMAND_ENV)
@@ -528,7 +560,7 @@ async fn workspace_start(
     if !use_leader {
         anyhow::bail!(
             "`grok workspace` requires leader mode (the workspace is shared via the leader).\n\
-             Enable it with `[cli] use_leader = true` in ~/.grok/config.toml, or pass --leader."
+             Enable it with `[cli] use_leader = true` in ~/.failure/config.toml, or pass --leader."
         );
     }
     ensure_authenticated(
@@ -1057,6 +1089,7 @@ async fn run_agent_command(
         agent_config.plugins.cli_plugin_dirs = agent_args.canonical_plugin_dirs();
     }
     apply_agent_endpoint_args(&agent_args, &mut agent_config);
+    apply_agent_provider_args(&agent_args, &mut agent_config);
     agent_config.remote_settings = remote_settings.clone();
     agent_config.resolve_runtime_fields(&xai_grok_shell::agent::config::RuntimeResolutionContext {
         raw_config: &raw_config,
@@ -1427,7 +1460,7 @@ fn raise_fd_limit() {
 #[cfg(not(target_os = "macos"))]
 fn raise_fd_limit() {}
 /// Single audit point for the `Command::Dashboard` soft-subcommand.
-/// Sets `GROK_OPEN_DASHBOARD_AT_STARTUP=1` if the user asked for
+/// Sets `FAILURE_OPEN_DASHBOARD_AT_STARTUP=1` if the user asked for
 /// `grok dashboard`, and clears `args.command` so the regular
 /// subcommand match doesn't try to handle it.
 ///
@@ -1437,7 +1470,7 @@ fn raise_fd_limit() {}
 /// is compatible with `--no-leader`.
 ///
 /// The only gate is the feature flag: a disabled dashboard
-/// (`[dashboard].enabled = false` / `GROK_AGENT_DASHBOARD=0`) is a CLI
+/// (`[dashboard].enabled = false` / `FAILURE_AGENT_DASHBOARD=0`) is a CLI
 /// error here, before the TUI starts, because the welcome view silently
 /// drops the equivalent runtime toast.
 fn flag_dashboard_at_startup_if_requested(args: &mut PagerArgs) -> Result<()> {
@@ -1447,12 +1480,12 @@ fn flag_dashboard_at_startup_if_requested(args: &mut PagerArgs) -> Result<()> {
     if !xai_grok_pager::views::dashboard::dashboard_enabled() {
         anyhow::bail!(
             "the Agent Dashboard is disabled. Enable it by removing \
-             `[dashboard] enabled = false` from ~/.grok/config.toml and \
-             unsetting GROK_AGENT_DASHBOARD=0."
+             `[dashboard] enabled = false` from ~/.failure/config.toml and \
+             unsetting FAILURE_AGENT_DASHBOARD=0."
         );
     }
     args.command = None;
-    unsafe { std::env::set_var("GROK_OPEN_DASHBOARD_AT_STARTUP", "1") };
+    unsafe { std::env::set_var("FAILURE_OPEN_DASHBOARD_AT_STARTUP", "1") };
     Ok(())
 }
 const RUNTIME_SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
@@ -1667,14 +1700,14 @@ async fn async_main() -> Result<()> {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let mut args = PagerArgs::parse_and_apply_cwd()?;
     if let Some(ref mode) = args.compaction_mode {
-        unsafe { std::env::set_var("GROK_COMPACTION_MODE", mode) };
+        unsafe { std::env::set_var("FAILURE_COMPACTION_MODE", mode) };
     }
     if let Some(ref detail) = args.compaction_detail {
-        unsafe { std::env::set_var("GROK_COMPACTION_DETAIL", detail) };
+        unsafe { std::env::set_var("FAILURE_COMPACTION_DETAIL", detail) };
     }
     if args.chat() {
         unsafe {
-            std::env::set_var(xai_grok_shell::agent::chat_modes::GROK_CHAT_MODE_ENV, "1");
+            std::env::set_var(xai_grok_shell::agent::chat_modes::FAILURE_CHAT_MODE_ENV, "1");
         }
     }
     if let Some(ref socket) = args.leader_socket {
@@ -1682,8 +1715,8 @@ async fn async_main() -> Result<()> {
     }
     if let Some(ref path) = args.debug_file {
         unsafe {
-            std::env::set_var("GROK_DEBUG_LOG", path);
-            std::env::remove_var("GROK_LOG_FILE");
+            std::env::set_var("FAILURE_DEBUG_LOG", path);
+            std::env::remove_var("FAILURE_LOG_FILE");
         }
     }
     if args.debug || args.debug_file.is_some() {
@@ -1692,8 +1725,8 @@ async fn async_main() -> Result<()> {
                 unsafe { std::env::set_var(k, v) };
             }
         };
-        set_if_unset("GROK_DEBUG_LOG", "1");
-        set_if_unset("GROK_HOOKS_LOG", "1");
+        set_if_unset("FAILURE_DEBUG_LOG", "1");
+        set_if_unset("FAILURE_HOOKS_LOG", "1");
     }
     if let Some(Command::Completions { shell }) = &args.command {
         xai_grok_pager::completions_cmd::run(*shell);
@@ -1882,9 +1915,23 @@ async fn async_main() -> Result<()> {
                 oauth,
                 device_auth,
                 devbox,
+                provider,
+                api_key,
             } => {
                 init_tracing_simple("cli");
                 let _otel_guard = xai_grok_telemetry::otel_layer::otel_guard();
+                if let (Some(provider), Some(api_key)) = (provider.as_deref(), api_key.as_deref())
+                {
+                    let scope = xai_grok_shell::auth::provider_api_key_scope(provider);
+                    xai_grok_shell::auth::store_provider_api_key(
+                        &xai_grok_shell::util::grok_home::grok_home(),
+                        &scope,
+                        api_key,
+                    )
+                    .map_err(|e| anyhow::anyhow!("Failed to store API key: {e}"))?;
+                    println!("Stored API key for provider \"{provider}\".");
+                    xai_grok_shell::instrumentation::finalize_and_exit(0);
+                }
                 let config = xai_grok_shell::config::load_effective_config_disk_only()
                     .map_err(|e| anyhow::anyhow!("Failed to load config: {e}"))?;
                 let config = AgentConfig::new_from_toml_cfg(&config)
@@ -2086,7 +2133,7 @@ fn build_update_config() -> UpdateConfig {
                 xai_grok_shell::agent::config::EndpointsConfig::default().deployment_key;
         }
     });
-    config.npm_registry = std::env::var(obfstr::obfstr!("GROK_NPM_REGISTRY"))
+    config.npm_registry = std::env::var(obfstr::obfstr!("FAILURE_NPM_REGISTRY"))
         .ok()
         .or_else(xai_grok_shell::util::config::load_npm_registry_sync);
     if let Ok(root) = xai_grok_shell::config::load_effective_config_disk_only()
@@ -2105,7 +2152,7 @@ fn should_check_for_updates(no_auto_update_flag: bool) -> bool {
     if no_auto_update_flag {
         return false;
     }
-    !std::env::var_os("GROK_DISABLE_AUTOUPDATER")
+    !std::env::var_os("FAILURE_DISABLE_AUTOUPDATER")
         .is_some_and(|v| env_flag_enabled(&v.to_string_lossy()))
 }
 /// Gate for the stdio agent's background auto-update: only the direct stdio
@@ -2121,7 +2168,7 @@ fn stdio_auto_update_enabled(
 /// True when `exe` is the binary `<grok_home>/bin/grok` resolves to, the
 /// install that adopts a staged update on respawn. Both sides are
 /// canonicalized; any failure reports unmanaged and skips the update. The
-/// npm shim hardcodes `~/.grok`, so a custom `GROK_HOME` skips here too.
+/// npm shim hardcodes `~/.failure`, so a custom `FAILURE_HOME` skips here too.
 fn is_managed_install(exe: Option<std::path::PathBuf>, grok_home: &std::path::Path) -> bool {
     if grok_home.as_os_str().is_empty() {
         return false;
@@ -2463,7 +2510,7 @@ mod tests {
     /// `grok dashboard` flags the startup hook without forcing leader mode —
     /// the dashboard is independent of leader mode, so the launch keeps
     /// whatever leader setting the user (or config) chose.
-    #[serial_test::serial(GROK_AGENT_DASHBOARD)]
+    #[serial_test::serial(FAILURE_AGENT_DASHBOARD)]
     #[test]
     fn dashboard_subcommand_flags_startup_without_forcing_leader() {
         let mut args = PagerArgs::try_parse_from(["grok", "dashboard"]).unwrap();
@@ -2475,16 +2522,16 @@ mod tests {
             "soft subcommand must be consumed so the interactive path runs",
         );
         assert_eq!(
-            std::env::var("GROK_OPEN_DASHBOARD_AT_STARTUP").as_deref(),
+            std::env::var("FAILURE_OPEN_DASHBOARD_AT_STARTUP").as_deref(),
             Ok("1"),
             "startup hook flag must be set",
         );
-        unsafe { std::env::remove_var("GROK_OPEN_DASHBOARD_AT_STARTUP") };
+        unsafe { std::env::remove_var("FAILURE_OPEN_DASHBOARD_AT_STARTUP") };
     }
     /// `grok dashboard --no-leader` is allowed — the dashboard does not
     /// require a leader, so the combination launches into the dashboard in
     /// non-leader mode.
-    #[serial_test::serial(GROK_AGENT_DASHBOARD)]
+    #[serial_test::serial(FAILURE_AGENT_DASHBOARD)]
     #[test]
     fn dashboard_subcommand_allows_no_leader() {
         let mut args = PagerArgs::try_parse_from(["grok", "--no-leader", "dashboard"]).unwrap();
@@ -2497,25 +2544,25 @@ mod tests {
             "soft subcommand must be consumed so the interactive path runs",
         );
         assert_eq!(
-            std::env::var("GROK_OPEN_DASHBOARD_AT_STARTUP").as_deref(),
+            std::env::var("FAILURE_OPEN_DASHBOARD_AT_STARTUP").as_deref(),
             Ok("1"),
             "startup hook flag must be set",
         );
-        unsafe { std::env::remove_var("GROK_OPEN_DASHBOARD_AT_STARTUP") };
+        unsafe { std::env::remove_var("FAILURE_OPEN_DASHBOARD_AT_STARTUP") };
     }
-    /// `GROK_AGENT_DASHBOARD=0` disables the feature — the subcommand
+    /// `FAILURE_AGENT_DASHBOARD=0` disables the feature — the subcommand
     /// must error visibly before the TUI starts.
-    #[serial_test::serial(GROK_AGENT_DASHBOARD)]
+    #[serial_test::serial(FAILURE_AGENT_DASHBOARD)]
     #[test]
     fn dashboard_subcommand_errors_when_disabled() {
-        unsafe { std::env::set_var("GROK_AGENT_DASHBOARD", "0") };
+        unsafe { std::env::set_var("FAILURE_AGENT_DASHBOARD", "0") };
         let mut args = PagerArgs::try_parse_from(["grok", "dashboard"]).unwrap();
         let result = flag_dashboard_at_startup_if_requested(&mut args);
-        unsafe { std::env::remove_var("GROK_AGENT_DASHBOARD") };
+        unsafe { std::env::remove_var("FAILURE_AGENT_DASHBOARD") };
         let err = result.expect_err("disabled dashboard must error");
         assert!(err.to_string().contains("disabled"), "got: {err}");
         assert!(
-            std::env::var("GROK_OPEN_DASHBOARD_AT_STARTUP").is_err(),
+            std::env::var("FAILURE_OPEN_DASHBOARD_AT_STARTUP").is_err(),
             "failure path must not flag the startup hook",
         );
     }
@@ -2553,16 +2600,16 @@ mod tests {
             WorkspaceGate::Disabled
         );
     }
-    #[serial_test::serial(GROK_WORKSPACE_COMMAND)]
+    #[serial_test::serial(FAILURE_WORKSPACE_COMMAND)]
     #[test]
     fn workspace_command_env_override_parsing() {
-        unsafe { std::env::remove_var("GROK_WORKSPACE_COMMAND") };
+        unsafe { std::env::remove_var("FAILURE_WORKSPACE_COMMAND") };
         assert_eq!(workspace_command_env_override(), None);
-        unsafe { std::env::set_var("GROK_WORKSPACE_COMMAND", "1") };
+        unsafe { std::env::set_var("FAILURE_WORKSPACE_COMMAND", "1") };
         assert_eq!(workspace_command_env_override(), Some(true));
-        unsafe { std::env::set_var("GROK_WORKSPACE_COMMAND", "off") };
+        unsafe { std::env::set_var("FAILURE_WORKSPACE_COMMAND", "off") };
         assert_eq!(workspace_command_env_override(), Some(false));
-        unsafe { std::env::remove_var("GROK_WORKSPACE_COMMAND") };
+        unsafe { std::env::remove_var("FAILURE_WORKSPACE_COMMAND") };
     }
     fn make_state() -> std::sync::Mutex<StdioReplayState> {
         std::sync::Mutex::new(StdioReplayState::default())

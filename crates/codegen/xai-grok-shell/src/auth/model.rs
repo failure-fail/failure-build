@@ -13,6 +13,13 @@ pub(super) const LEGACY_SCOPE: &str = "https://accounts.x.ai/sign-in";
 /// auth.json scope key for plain API key auth (desktop login, `grok login --api-key`).
 pub const API_KEY_SCOPE: &str = "xai::api_key";
 
+/// auth.json scope key for a named BYOP `[provider.*]` API key, e.g.
+/// `openai::api_key`. Independent of [`API_KEY_SCOPE`] (xAI's own scope),
+/// so storing a BYOP key never clobbers or is clobbered by the xAI one.
+pub fn provider_api_key_scope(provider: &str) -> String {
+    format!("{provider}::api_key")
+}
+
 const BLOCKED_REASON_NO_LOGS: &str = "BLOCKED_REASON_NO_LOGS";
 const BLOCKED_REASON_NO_LOGS_MODERATED: &str = "BLOCKED_REASON_NO_LOGS_MODERATED";
 
@@ -318,10 +325,10 @@ pub fn lookup_auth(map: &AuthStore, scope: &str) -> Option<GrokAuth> {
     Some(auth)
 }
 
-/// Early-invalidation buffer. Override with `GROK_AUTH_EARLY_INVALIDATION_SECS`
+/// Early-invalidation buffer. Override with `FAILURE_AUTH_EARLY_INVALIDATION_SECS`
 /// for testing (e.g. `=5` to shrink the buffer to 5 seconds).
 pub(super) fn early_invalidation() -> Duration {
-    std::env::var("GROK_AUTH_EARLY_INVALIDATION_SECS")
+    std::env::var("FAILURE_AUTH_EARLY_INVALIDATION_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .map(|s| Duration::seconds(s as i64))
