@@ -51,10 +51,16 @@ irm https://raw.githubusercontent.com/failure-fail/failure-build/main/crates/cod
 Both installers pull binaries from this repo's
 [GitHub Releases](https://github.com/failure-fail/failure-build/releases),
 built by `.github/workflows/release.yml` for linux-x86_64/arm64,
-macos-aarch64 (Apple Silicon), and windows-x86_64. macOS Intel (x86_64) isn't
-built — GitHub no longer reliably provisions hosted Intel Mac runners — so
-Intel Mac users should fall back to
+macos-aarch64 (Apple Silicon), windows-x86_64, and android-aarch64. macOS
+Intel (x86_64) isn't built — GitHub no longer reliably provisions hosted
+Intel Mac runners — so Intel Mac users should fall back to
 [Building from source](#building-from-source) below.
+
+**Android** has no general-purpose terminal, so there's no standalone
+`.apk` — instead, the android-aarch64 build runs inside
+[Termux](https://termux.dev/), which provides one. See the npm package
+[README](crates/codegen/xai-grok-pager/npm/failure/README.md#android-via-termux)
+for the install steps.
 
 ## Building from source
 

@@ -85,8 +85,13 @@ fn bundle_rg() -> Result<(), Box<dyn std::error::Error>> {
     // on cfg(bundle_rg) compiled-out, so the runtime falls back to `rg` on
     // PATH. Users install ripgrep separately (winget / scoop). An explicit
     // FAILURE_TOOLS_BUNDLE_RG_PATH still bundles regardless of target.
+    //
+    // Same story for Android (Termux): ripgrep publishes no android-aarch64
+    // static release asset, and cross-arch bundling a desktop-Linux binary
+    // into an Android build would just fail at exec time. Fall back to
+    // Termux's own `pkg install ripgrep` instead.
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if target_os == "windows" && path_override.is_none() {
+    if (target_os == "windows" || target_os == "android") && path_override.is_none() {
         return Ok(());
     }
 

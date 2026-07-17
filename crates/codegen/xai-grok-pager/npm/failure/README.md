@@ -184,6 +184,26 @@ macOS Intel (x86_64) isn't built by `.github/workflows/release.yml` — GitHub
 no longer reliably provisions hosted Intel Mac runners (`macos-13` jobs never
 left the queue). Build from source on Intel Macs in the meantime.
 
+### Android (via Termux)
+
+There's no standalone `.apk` — Android has no general-purpose terminal by
+default, so Failure Build runs inside [Termux](https://termux.dev/) instead,
+which provides one plus a real Linux userland:
+
+```bash
+pkg install ripgrep git
+curl -fsSL -o failure "https://github.com/failure-fail/failure-build/releases/latest/download/failure-<version>-android-aarch64"
+chmod +x failure
+./failure
+```
+
+(Replace `<version>` with the version from the
+[latest release](https://github.com/failure-fail/failure-build/releases/latest).)
+This is a native `aarch64-linux-android` build, not the `linux-aarch64` one
+above — they use different C libraries (Bionic vs. glibc) and aren't
+interchangeable. `failure update` and the `curl | bash` installer don't know
+about this target yet; update by re-running the commands above.
+
 ## Documentation
 
 See [`docs/user-guide`](https://github.com/failure-fail/failure-build/tree/main/crates/codegen/xai-grok-pager/docs/user-guide)

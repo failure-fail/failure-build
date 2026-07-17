@@ -36,6 +36,9 @@ jobs:
             platform: macos-aarch64
           - os: windows-latest
             platform: windows-x86_64
+          - os: ubuntu-latest
+            platform: android-aarch64
+            android: true
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -44,8 +47,17 @@ jobs:
         run: rustup show
 
       - name: Install protoc (Linux)
+        # protoc runs at build time on the host (codegen, not part of the
+        # compiled output), so this also covers the Android cross-compile leg
+        # — its host OS is still ubuntu-latest.
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install Android NDK target
+        if: matrix.android
+        run: |
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
 
       - name: Install protoc (macOS)
         if: runner.os == 'macOS'
@@ -69,6 +81,7 @@ jobs:
           echo "PROTOC=$protocPath" >> $env:GITHUB_ENV
 
       - name: Build release binary
+        if: '!matrix.android'
         # MSVC's link.exe hits "LNK4319: A PDB limit was hit" on this
         # workspace's release binary — too many/too-long symbol names for one
         # PDB. /DEBUG:LongSymbolTruncate is link.exe's own suggested fix (see
@@ -79,12 +92,28 @@ jobs:
           RUSTFLAGS: ${{ runner.os == 'Windows' && '-C link-arg=/DEBUG:LongSymbolTruncate' || '' }}
         run: cargo build --release -p xai-grok-pager-bin
 
+      - name: Build release binary (Android)
+        if: matrix.android
+        # cross-compiles via the NDK toolchain; output lands under
+        # target/aarch64-linux-android/release/, not the native target/release/
+        # that the other legs use. API level 24 matches Termux's own minimum.
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: cargo ndk --target aarch64-linux-android --platform 24 -- build --release -p xai-grok-pager-bin
+
       - name: Stage artifact (Unix)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && !matrix.android
         shell: bash
         run: |
           mkdir -p dist
           cp target/release/xai-grok-pager "dist/failure-${{ matrix.platform }}"
+
+      - name: Stage artifact (Android)
+        if: matrix.android
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/aarch64-linux-android/release/xai-grok-pager "dist/failure-${{ matrix.platform }}"
 
       - name: Stage artifact (Windows)
         if: runner.os == 'Windows'
@@ -101,6 +130,11 @@ jobs:
 
   release:
     needs: build
+    # Android is the newest, least-proven leg — if it fails, still publish
+    # the four platforms that did build rather than blocking the whole
+    # release on it (download-artifact below just works with whatever
+    # artifacts exist).
+    if: always() && needs.build.result != 'cancelled'
     runs-on: ubuntu-latest
     permissions:
       contents: write

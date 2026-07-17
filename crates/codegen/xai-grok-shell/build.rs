@@ -48,8 +48,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // `winget install BurntSushi.ripgrep.MSVC` or `scoop install ripgrep`.
     // An explicit FAILURE_SHELL_BUNDLE_RG_PATH still bundles on Windows (the
     // override path below copies any binary regardless of target).
+    //
+    // Same story for Android (Termux): no android-aarch64 static ripgrep
+    // release asset exists, and bundling a desktop-Linux binary into an
+    // Android build would just fail at exec time. Falls back to Termux's
+    // own `pkg install ripgrep`.
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if target_os == "windows" && path_override.is_none() {
+    if (target_os == "windows" || target_os == "android") && path_override.is_none() {
         return Ok(());
     }
 
