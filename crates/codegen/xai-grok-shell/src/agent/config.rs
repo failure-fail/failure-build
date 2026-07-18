@@ -1823,16 +1823,22 @@ impl Config {
     }
     /// Point the models-list fetch (`ModelsManager`'s startup/periodic
     /// refresh) at the active BYOP provider/model override, so a user running
-    /// with `--provider`/`--base-url` (or a `[model.*]`/`[provider.*]` config
-    /// override) gets that provider's own catalog instead of xAI's. No-op
-    /// when no override is active, or when the resolved endpoint is still a
-    /// first-party xAI host (nothing to redirect).
+    /// with `--provider`/`--base-url` (ephemeral, `default_model_override`)
+    /// or a persisted `[model.*]` entry selected via `[models] default =
+    /// "..."`/`failure login --provider` gets that provider's own catalog
+    /// instead of xAI's. No-op when neither is set to a known `[model.*]`
+    /// entry, or when the resolved endpoint is still a first-party xAI host
+    /// (nothing to redirect).
     ///
     /// Called once per bootstrap (`init::resolve_config`), so this re-resolves
     /// on every app open — the catalog refresh that follows (`ModelsManager`'s
     /// unconditional startup fetch) then hits the right endpoint.
     pub fn sync_byop_models_endpoint(&mut self) {
-        let Some(key) = self.default_model_override.clone() else {
+        let Some(key) = self
+            .default_model_override
+            .clone()
+            .or_else(|| self.models.default.clone())
+        else {
             return;
         };
         let Some(over) = self.config_models.get(&key) else {
