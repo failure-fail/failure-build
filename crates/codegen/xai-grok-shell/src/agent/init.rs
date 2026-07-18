@@ -31,11 +31,11 @@ pub fn bootstrap(
     let models_manager = ModelsManager::from_config(&cfg, prefetched, auth_manager.clone())?;
 
     // Force a live models-list refetch on every app open, independent of
-    // `from_config`'s disk-cache TTL — so a model newly available from the
-    // configured provider (including a BYOP provider, see
-    // `Config::sync_byop_models_endpoint` above) shows up without waiting out
-    // the cache window. Applied on top of the cache/bundled catalog already
-    // in place, so startup never blocks on it.
+    // `from_config`'s disk-cache TTL — so a model newly available from xAI or
+    // any configured BYOP provider (see `Config::sync_byop_models_sources`
+    // above — every one gets fetched and merged, not just one at a time)
+    // shows up without waiting out the cache window. Applied on top of the
+    // cache/bundled catalog already in place, so startup never blocks on it.
     {
         let mgr = models_manager.clone();
         tokio::spawn(async move {
@@ -132,7 +132,7 @@ fn resolve_config(cfg: &AgentConfig, auth_manager: &AuthManager) -> AgentConfig 
         cfg.path_not_found_hints = v;
     }
 
-    cfg.sync_byop_models_endpoint();
+    cfg.sync_byop_models_sources();
 
     cfg
 }

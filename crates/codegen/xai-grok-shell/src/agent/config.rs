@@ -137,6 +137,14 @@ impl std::fmt::Display for EnvKeys {
         f.write_str(&self.names().join(", "))
     }
 }
+/// A single extra BYOP models-list source to merge into the catalog refresh —
+/// resolved credentials for one `[model.*]` entry's provider, ready to hit
+/// `{base_url}/models` directly. See `Config::sync_byop_models_sources`.
+#[derive(Debug, Clone)]
+pub struct ByopModelsSource {
+    pub base_url: String,
+    pub api_key: String,
+}
 /// Configuration for API endpoints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -159,12 +167,12 @@ pub struct EndpointsConfig {
     /// Env: `FAILURE_MODELS_LIST_URL`. Overrides the default `{base}/models` list URL.
     #[serde(alias = "models_endpoint", skip_serializing_if = "Option::is_none")]
     pub models_list_url: Option<String>,
-    /// API key for `models_base_url`/`models_list_url`, resolved at runtime from
-    /// the active BYOP provider/model override (see
-    /// `sync_byop_models_endpoint`). Never user-configurable directly and never
+    /// Extra BYOP catalogs to merge into the models-list refresh, resolved at
+    /// runtime from every `[model.*]` entry that names a non-xAI provider (see
+    /// `sync_byop_models_sources`). Never user-configurable directly and never
     /// persisted — resolved fresh on every bootstrap.
     #[serde(skip)]
-    pub models_api_key: Option<String>,
+    pub models_extra_sources: Vec<ByopModelsSource>,
     /// Env: `FAILURE_FEEDBACK_BASE_URL`. Where feedback submissions go.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feedback_base_url: Option<String>,
@@ -553,7 +561,7 @@ impl Default for EndpointsConfig {
             alpha_test_key: None,
             models_base_url: env_string("FAILURE_MODELS_BASE_URL"),
             models_list_url: env_string("FAILURE_MODELS_LIST_URL"),
-            models_api_key: None,
+            models_extra_sources: Vec::new(),
             feedback_base_url: env_string("FAILURE_FEEDBACK_BASE_URL"),
             trace_upload_url: env_string("FAILURE_TRACE_UPLOAD_URL"),
             trace_upload_bucket: env_string("FAILURE_TRACE_UPLOAD_BUCKET"),
@@ -1821,37 +1829,37 @@ impl Config {
         }
         Ok(())
     }
-    /// Point the models-list fetch (`ModelsManager`'s startup/periodic
-    /// refresh) at the active BYOP provider/model override, so a user running
-    /// with `--provider`/`--base-url` (ephemeral, `default_model_override`)
-    /// or a persisted `[model.*]` entry selected via `[models] default =
-    /// "..."`/`failure login --provider` gets that provider's own catalog
-    /// instead of xAI's. No-op when neither is set to a known `[model.*]`
-    /// entry, or when the resolved endpoint is still a first-party xAI host
-    /// (nothing to redirect).
+    /// Collect every distinct BYOP catalog source referenced anywhere in
+    /// `[model.*]` (regardless of which one is currently the active default),
+    /// so the models-list refresh can fetch xAI's own catalog *and* every
+    /// configured custom provider's, merged — rather than one replacing the
+    /// other. Dedupes by resolved `base_url`. Skips entries with no resolvable
+    /// API key, or whose base_url is still a first-party xAI host (nothing
+    /// extra to fetch there — already covered by the default catalog fetch).
     ///
     /// Called once per bootstrap (`init::resolve_config`), so this re-resolves
     /// on every app open — the catalog refresh that follows (`ModelsManager`'s
-    /// unconditional startup fetch) then hits the right endpoint.
-    pub fn sync_byop_models_endpoint(&mut self) {
-        let Some(key) = self
-            .default_model_override
-            .clone()
-            .or_else(|| self.models.default.clone())
-        else {
-            return;
-        };
-        let Some(over) = self.config_models.get(&key) else {
-            return;
-        };
-        let entry = over.apply(&key, None, &self.endpoints, &self.config_providers);
-        let creds = resolve_credentials(&entry, None);
-        if creds.api_key.is_none() || crate::util::is_first_party_xai_url(&creds.base_url) {
-            return;
+    /// unconditional startup fetch) then fetches every listed source.
+    pub fn sync_byop_models_sources(&mut self) {
+        let mut sources = Vec::new();
+        let mut seen_base_urls = std::collections::HashSet::new();
+        for (key, over) in &self.config_models {
+            let entry = over.apply(key, None, &self.endpoints, &self.config_providers);
+            let creds = resolve_credentials(&entry, None);
+            let Some(api_key) = creds.api_key else {
+                continue;
+            };
+            if crate::util::is_first_party_xai_url(&creds.base_url) {
+                continue;
+            }
+            if seen_base_urls.insert(creds.base_url.clone()) {
+                sources.push(ByopModelsSource {
+                    base_url: creds.base_url,
+                    api_key,
+                });
+            }
         }
-        self.endpoints.models_base_url = Some(creds.base_url);
-        self.endpoints.models_list_url = None;
-        self.endpoints.models_api_key = creds.api_key;
+        self.endpoints.models_extra_sources = sources;
     }
     /// Build an `AuthManager` with the configured proxy URL applied.
     pub fn create_auth_manager(&self) -> AuthManager {

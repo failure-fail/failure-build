@@ -228,10 +228,7 @@ impl ModelsManager {
         let prefetched_models = prefetched_models.or_else(|| {
             let cache = ModelsCacheManager::new();
             cache
-                .load_fresh(
-                    &fetch_auth.cache_auth_method(),
-                    &crate::remote::models_list_url(&cfg.endpoints, fetch_auth),
-                )
+                .load_fresh(&fetch_auth.cache_auth_method(), &cache_origin_key(&cfg.endpoints, fetch_auth))
                 .map(|c| c.models)
         });
         let has_prefetched = prefetched_models.is_some();
@@ -1447,8 +1444,8 @@ fn prefetch_models_blocking_gated(
     remote_fetch_enabled: bool,
 ) -> Option<IndexMap<String, ModelEntry>> {
     let cache_auth = fetch_auth.cache_auth_method();
-    // Same URL the fetch below will hit — the cache is only valid for it.
-    let cache_origin = crate::remote::models_list_url(endpoints, fetch_auth);
+    // Same source set the fetch below will hit — the cache is only valid for it.
+    let cache_origin = cache_origin_key(endpoints, fetch_auth);
     let cache = ModelsCacheManager::new();
     if let Some(cached) = cache.load_fresh(&cache_auth, &cache_origin) {
         return Some(cached.models);
@@ -1463,31 +1460,104 @@ fn prefetch_models_blocking_gated(
     }
 
     let _timer = crate::instrumentation_timer!("startup.fetch_models_blocking");
-    match fetch_models_blocking(endpoints, auth, fetch_auth) {
-        Ok(FetchModelsResult { models, etag }) if !models.is_empty() => {
+    let mut etag = None;
+    let mut primary_succeeded = false;
+    let mut map = match fetch_models_blocking(endpoints, auth, fetch_auth) {
+        Ok(FetchModelsResult {
+            models,
+            etag: primary_etag,
+        }) if !models.is_empty() => {
             let api_base_url_override = match fetch_auth {
                 ModelFetchAuth::ApiKey => Some(endpoints.xai_api_base_url.clone()),
                 _ => None,
             };
-            let map = build_prefetched_map(models, api_base_url_override);
-
-            // NOTE: inheriting context_window / agent_type / api_backend
-            // from hardcoded defaults is handled centrally in
-            // `resolve_model_list` (config.rs), not here. Don't re-add it.
-
-            tracing::info!(count = map.len(), etag = ?etag, "Prefetched models");
-            cache.persist(&map, etag.as_deref(), cache_auth, &cache_origin);
-            Some(map)
+            etag = primary_etag;
+            primary_succeeded = true;
+            build_prefetched_map(models, api_base_url_override)
         }
         Ok(FetchModelsResult { .. }) => {
             tracing::warn!("Models endpoint returned empty list");
-            None
+            IndexMap::new()
         }
         Err(e) => {
             tracing::warn!("Failed to fetch models: {:?}", e);
-            None
+            IndexMap::new()
+        }
+    };
+
+    // Merge in every configured BYOP provider's own catalog alongside (not
+    // instead of) the default fetch above.
+    let mut byop_succeeded = false;
+    for source in &endpoints.models_extra_sources {
+        match crate::remote::fetch_extra_models_blocking(source) {
+            Ok(FetchModelsResult { models, .. }) if !models.is_empty() => {
+                byop_succeeded = true;
+                for m in models {
+                    let key = m.id.clone().unwrap_or_else(|| m.model.clone());
+                    let info = config::ModelInfo::from_config(&m);
+                    let api_base_url = m.api_base_url.clone().or_else(|| Some(source.base_url.clone()));
+                    map.insert(
+                        key,
+                        ModelEntry {
+                            info,
+                            api_key: Some(source.api_key.clone()),
+                            env_key: None,
+                            api_base_url,
+                        },
+                    );
+                }
+            }
+            Ok(FetchModelsResult { .. }) => {
+                tracing::warn!(base_url = %source.base_url, "BYOP models endpoint returned empty list");
+            }
+            Err(e) => {
+                tracing::warn!(base_url = %source.base_url, "Failed to fetch BYOP models: {:?}", e);
+            }
         }
     }
+
+    // Neither source produced anything live — same "nothing real fetched"
+    // outcome as before BYOP merging existed; caller falls back to bundled
+    // defaults via `resolve_model_list`.
+    if !primary_succeeded && !byop_succeeded {
+        return None;
+    }
+    // The default catalog fetch specifically failed but a BYOP source came
+    // through: seed the bundled xAI defaults underneath so the merged result
+    // isn't missing xAI's own models just because its live fetch hiccuped.
+    if !primary_succeeded {
+        for (key, entry) in config::default_model_entries(endpoints) {
+            map.entry(key).or_insert(entry);
+        }
+    }
+
+    // NOTE: inheriting context_window / agent_type / api_backend
+    // from hardcoded defaults is handled centrally in
+    // `resolve_model_list` (config.rs), not here. Don't re-add it.
+
+    tracing::info!(count = map.len(), etag = ?etag, "Prefetched models");
+    cache.persist(&map, etag.as_deref(), cache_auth, &cache_origin);
+    Some(map)
+}
+
+/// Cache identity for a models-list fetch: the primary source URL plus every
+/// configured BYOP extra source (sorted, so key order doesn't spuriously
+/// invalidate the cache). Adding/removing/editing a `[model.*]` provider
+/// changes this key, so the merge result is never served stale for a
+/// different source set.
+fn cache_origin_key(endpoints: &config::EndpointsConfig, fetch_auth: ModelFetchAuth) -> String {
+    let mut key = crate::remote::models_list_url(endpoints, fetch_auth);
+    if !endpoints.models_extra_sources.is_empty() {
+        let mut extra: Vec<&str> = endpoints
+            .models_extra_sources
+            .iter()
+            .map(|s| s.base_url.as_str())
+            .collect();
+        extra.sort_unstable();
+        key.push_str("+byop:");
+        key.push_str(&extra.join(","));
+    }
+    key
 }
 
 /// Startup prefetch result: models + remote settings.

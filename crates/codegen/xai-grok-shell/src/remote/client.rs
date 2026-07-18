@@ -724,11 +724,7 @@ pub(crate) fn fetch_models_blocking(
     let mut request = client.get(&source.url);
     match source.auth {
         EndpointAuth::ApiKey => {
-            let api_key = endpoints
-                .models_api_key
-                .clone()
-                .ok_or(std::env::VarError::NotPresent)
-                .or_else(|_| crate::agent::auth_method::read_xai_api_key_env())
+            let api_key = crate::agent::auth_method::read_xai_api_key_env()
                 .or_else(|_| {
                     auth.map(|a| a.key.clone())
                         .ok_or(std::env::VarError::NotPresent)
@@ -783,6 +779,50 @@ pub(crate) fn fetch_models_blocking(
             None => {
                 tracing::warn!(
                     "Skipping model at index {}: missing required field ('model' or 'context_window') or invalid types",
+                    idx
+                )
+            }
+        }
+    }
+    Ok(FetchModelsResult { models, etag })
+}
+/// Fetch models from one BYOP `[model.*]` provider's own `{base_url}/models`
+/// endpoint — a merge source alongside (not instead of) the default catalog
+/// fetch above. See `Config::sync_byop_models_sources`.
+pub(crate) fn fetch_extra_models_blocking(
+    source: &crate::agent::config::ByopModelsSource,
+) -> Result<FetchModelsResult, BackendError> {
+    let client = crate::http::shared_blocking_client();
+    let url = format!("{}/models", source.base_url.trim_end_matches('/'));
+    tracing::info!("Fetching BYOP models from {}", url);
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", source.api_key))
+        .send()?;
+    if !response.status().is_success() {
+        let status = response.status().as_u16();
+        let body = response.text().unwrap_or_default();
+        tracing::warn!(base_url = %source.base_url, "Failed to fetch BYOP models: {} - {}", status, body);
+        return Err(BackendError::RequestFailed { status, body });
+    }
+    let etag = response
+        .headers()
+        .get("etag")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let models_response: ModelsResponse = response.json()?;
+    tracing::info!(
+        "Fetched {} BYOP models from {}",
+        models_response.data.len(),
+        source.base_url
+    );
+    let mut models = Vec::with_capacity(models_response.data.len());
+    for (idx, value) in models_response.data.into_iter().enumerate() {
+        match parse_remote_model_value(&value, &source.base_url) {
+            Some(model) => models.push(model),
+            None => {
+                tracing::warn!(
+                    "Skipping BYOP model at index {}: missing required field ('model' or 'context_window') or invalid types",
                     idx
                 )
             }
