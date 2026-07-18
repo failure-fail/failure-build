@@ -1522,14 +1522,11 @@ fn prefetch_models_blocking_gated(
     if !primary_succeeded && !byop_succeeded {
         return None;
     }
-    // The default catalog fetch specifically failed but a BYOP source came
-    // through: seed the bundled xAI defaults underneath so the merged result
-    // isn't missing xAI's own models just because its live fetch hiccuped.
-    if !primary_succeeded {
-        for (key, entry) in config::default_model_entries(endpoints) {
-            map.entry(key).or_insert(entry);
-        }
-    }
+    // Deliberately no bundled-xAI-defaults fallback here when only the
+    // primary fetch fails: a hardcoded xAI entry the user has no working
+    // credentials for (no session, no API key — the common case for a
+    // pure-BYOP setup) would just be a dead, unselectable entry cluttering
+    // the list. Show only what was actually, successfully fetched.
 
     // NOTE: inheriting context_window / agent_type / api_backend
     // from hardcoded defaults is handled centrally in
