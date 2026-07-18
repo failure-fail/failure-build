@@ -724,7 +724,11 @@ pub(crate) fn fetch_models_blocking(
     let mut request = client.get(&source.url);
     match source.auth {
         EndpointAuth::ApiKey => {
-            let api_key = crate::agent::auth_method::read_xai_api_key_env()
+            let api_key = endpoints
+                .models_api_key
+                .clone()
+                .ok_or(std::env::VarError::NotPresent)
+                .or_else(|_| crate::agent::auth_method::read_xai_api_key_env())
                 .or_else(|_| {
                     auth.map(|a| a.key.clone())
                         .ok_or(std::env::VarError::NotPresent)

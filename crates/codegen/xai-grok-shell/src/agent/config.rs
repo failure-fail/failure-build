@@ -159,6 +159,12 @@ pub struct EndpointsConfig {
     /// Env: `FAILURE_MODELS_LIST_URL`. Overrides the default `{base}/models` list URL.
     #[serde(alias = "models_endpoint", skip_serializing_if = "Option::is_none")]
     pub models_list_url: Option<String>,
+    /// API key for `models_base_url`/`models_list_url`, resolved at runtime from
+    /// the active BYOP provider/model override (see
+    /// `sync_byop_models_endpoint`). Never user-configurable directly and never
+    /// persisted — resolved fresh on every bootstrap.
+    #[serde(skip)]
+    pub models_api_key: Option<String>,
     /// Env: `FAILURE_FEEDBACK_BASE_URL`. Where feedback submissions go.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub feedback_base_url: Option<String>,
@@ -547,6 +553,7 @@ impl Default for EndpointsConfig {
             alpha_test_key: None,
             models_base_url: env_string("FAILURE_MODELS_BASE_URL"),
             models_list_url: env_string("FAILURE_MODELS_LIST_URL"),
+            models_api_key: None,
             feedback_base_url: env_string("FAILURE_FEEDBACK_BASE_URL"),
             trace_upload_url: env_string("FAILURE_TRACE_UPLOAD_URL"),
             trace_upload_bucket: env_string("FAILURE_TRACE_UPLOAD_BUCKET"),
@@ -1813,6 +1820,32 @@ impl Config {
             }
         }
         Ok(())
+    }
+    /// Point the models-list fetch (`ModelsManager`'s startup/periodic
+    /// refresh) at the active BYOP provider/model override, so a user running
+    /// with `--provider`/`--base-url` (or a `[model.*]`/`[provider.*]` config
+    /// override) gets that provider's own catalog instead of xAI's. No-op
+    /// when no override is active, or when the resolved endpoint is still a
+    /// first-party xAI host (nothing to redirect).
+    ///
+    /// Called once per bootstrap (`init::resolve_config`), so this re-resolves
+    /// on every app open — the catalog refresh that follows (`ModelsManager`'s
+    /// unconditional startup fetch) then hits the right endpoint.
+    pub fn sync_byop_models_endpoint(&mut self) {
+        let Some(key) = self.default_model_override.clone() else {
+            return;
+        };
+        let Some(over) = self.config_models.get(&key) else {
+            return;
+        };
+        let entry = over.apply(&key, None, &self.endpoints, &self.config_providers);
+        let creds = resolve_credentials(&entry, None);
+        if creds.api_key.is_none() || crate::util::is_first_party_xai_url(&creds.base_url) {
+            return;
+        }
+        self.endpoints.models_base_url = Some(creds.base_url);
+        self.endpoints.models_list_url = None;
+        self.endpoints.models_api_key = creds.api_key;
     }
     /// Build an `AuthManager` with the configured proxy URL applied.
     pub fn create_auth_manager(&self) -> AuthManager {
@@ -6263,7 +6296,8 @@ reasoning_effort = "low"
         )
         .unwrap();
         let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
-        let model = resolve_model_list(&cfg, None)
+        let catalog = resolve_model_list(&cfg, None);
+        let model = catalog
             .get("mystery")
             .expect("model must remain in the catalog even with an unknown provider");
         assert_eq!(model.info.model, "some-model");

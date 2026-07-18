@@ -30,6 +30,20 @@ pub fn bootstrap(
     init_process(&cfg, auth_manager);
     let models_manager = ModelsManager::from_config(&cfg, prefetched, auth_manager.clone())?;
 
+    // Force a live models-list refetch on every app open, independent of
+    // `from_config`'s disk-cache TTL — so a model newly available from the
+    // configured provider (including a BYOP provider, see
+    // `Config::sync_byop_models_endpoint` above) shows up without waiting out
+    // the cache window. Applied on top of the cache/bundled catalog already
+    // in place, so startup never blocks on it.
+    {
+        let mgr = models_manager.clone();
+        tokio::spawn(async move {
+            mgr.list_models(crate::agent::models::RefreshStrategy::Online)
+                .await;
+        });
+    }
+
     // Refresh on every auth refresh — the FSEvents watcher can silently die after
     // macOS sleep, stranding the catalog on bundled defaults.
     models_manager.start_auth_refresh_watcher(auth_manager.refresh_notifier());
@@ -117,6 +131,8 @@ fn resolve_config(cfg: &AgentConfig, auth_manager: &AuthManager) -> AgentConfig 
     {
         cfg.path_not_found_hints = v;
     }
+
+    cfg.sync_byop_models_endpoint();
 
     cfg
 }
