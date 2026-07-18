@@ -12,6 +12,8 @@
 
 pub mod cache;
 pub mod color_support;
+mod catppuccin;
+mod dracula;
 mod failureday;
 mod failurenight;
 pub mod md_style;
@@ -33,6 +35,8 @@ pub enum ThemeKind {
     TokyoNight = 2,
     RosePineMoon = 3,
     OscuraMidnight = 5,
+    Dracula = 6,
+    CatppuccinMocha = 7,
     /// Meta-variant: follow system dark/light appearance.
     ///
     /// Never stored in `cache::CURRENT` — resolved to a concrete
@@ -51,6 +55,8 @@ impl ThemeKind {
         ThemeKind::TokyoNight,
         ThemeKind::RosePineMoon,
         ThemeKind::OscuraMidnight,
+        ThemeKind::Dracula,
+        ThemeKind::CatppuccinMocha,
     ];
 
     /// Theme kinds available on the current terminal.
@@ -78,6 +84,8 @@ impl ThemeKind {
             Self::FailureDay => "failureday",
             Self::RosePineMoon => "rosepine-moon",
             Self::OscuraMidnight => "oscura-midnight",
+            Self::Dracula => "dracula",
+            Self::CatppuccinMocha => "catppuccin-mocha",
             Self::Auto => "auto",
         }
     }
@@ -94,6 +102,8 @@ impl ThemeKind {
             Self::FailureDay => false,
             Self::RosePineMoon => true,
             Self::OscuraMidnight => true,
+            Self::Dracula => true,
+            Self::CatppuccinMocha => true,
             // Auto is resolved to a concrete theme before rendering.
             Self::Auto => false,
         }
@@ -112,6 +122,8 @@ impl ThemeKind {
                 Some(Self::RosePineMoon)
             }
             "oscura" | "oscura-midnight" => Some(Self::OscuraMidnight),
+            "dracula" => Some(Self::Dracula),
+            "catppuccin" | "catppuccin-mocha" | "mocha" => Some(Self::CatppuccinMocha),
             _ => None,
         }
     }
@@ -147,6 +159,9 @@ pub fn display_name_for_canonical(value: &str) -> &str {
         "failureday" => "Failure Day",
         "tokyonight" => "Tokyo Night",
         "rosepine-moon" => "Rose Pine Moon",
+        "oscura-midnight" => "Oscura Midnight",
+        "dracula" => "Dracula",
+        "catppuccin-mocha" => "Catppuccin Mocha",
         other => other,
     }
 }
@@ -275,6 +290,8 @@ impl Theme {
             ThemeKind::FailureDay => Self::failureday(),
             ThemeKind::RosePineMoon => Self::rosepine_moon(),
             ThemeKind::OscuraMidnight => Self::oscura_midnight(),
+            ThemeKind::Dracula => Self::dracula(),
+            ThemeKind::CatppuccinMocha => Self::catppuccin_mocha(),
             // Auto is resolved to a concrete theme before being stored;
             // if reached, fall back to FailureNight.
             ThemeKind::Auto => Self::failurenight(),
@@ -985,6 +1002,8 @@ mod tests {
                 ThemeKind::TokyoNight => Theme::tokyonight(),
                 ThemeKind::RosePineMoon => Theme::rosepine_moon(),
                 ThemeKind::OscuraMidnight => Theme::oscura_midnight(),
+                ThemeKind::Dracula => Theme::dracula(),
+                ThemeKind::CatppuccinMocha => Theme::catppuccin_mocha(),
                 ThemeKind::Auto => unreachable!("ALL excludes Auto"),
             };
             let track = lum(theme.scrollbar_bg, "scrollbar_bg", kind);

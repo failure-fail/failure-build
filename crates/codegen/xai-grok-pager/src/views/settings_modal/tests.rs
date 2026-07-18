@@ -6667,9 +6667,11 @@ fn max_thoughts_width_preview_title_styling_distinguishes_from_content() {
         crate::theme::ThemeKind::TokyoNight => crate::theme::Theme::tokyonight(),
         crate::theme::ThemeKind::FailureDay => crate::theme::Theme::failureday(),
         crate::theme::ThemeKind::RosePineMoon => crate::theme::Theme::rosepine_moon(),
-        // Resolved via `Theme::current()` rather than a constructor
-        // because `theme::oscura` is a private module.
+        // Resolved via `Theme::current()` rather than a constructor because
+        // `theme::oscura`/`theme::dracula`/`theme::catppuccin` are private modules.
         crate::theme::ThemeKind::OscuraMidnight => crate::theme::Theme::current(),
+        crate::theme::ThemeKind::Dracula => crate::theme::Theme::current(),
+        crate::theme::ThemeKind::CatppuccinMocha => crate::theme::Theme::current(),
         crate::theme::ThemeKind::Auto => crate::theme::Theme::failurenight(),
     };
     assert_ne!(

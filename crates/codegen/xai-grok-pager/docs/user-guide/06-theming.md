@@ -6,7 +6,7 @@ Failure Build draws all TUI colors from a central theme. You can switch themes w
 
 ## Available Themes
 
-Failure includes five built-in themes, plus an `auto` option that follows your system appearance:
+Failure includes seven built-in themes, plus an `auto` option that follows your system appearance:
 
 | Theme | Config Names | Description | Truecolor Required |
 |-------|-------------|-------------|--------------------|
@@ -15,6 +15,8 @@ Failure includes five built-in themes, plus an `auto` option that follows your s
 | **TokyoNight** | `tokyonight`, `tokyo-night`, `tokyo` | Dark, blue-tinted backgrounds from the Tokyo Night palette. Loses its character when quantized. | Yes |
 | **RosePineMoon** | `rosepine`, `rose-pine`, `rosepine-moon`, `rose-pine-moon` | Muted dark palette with mauve accents, from the Rosé Pine family. | Yes |
 | **OscuraMidnight** | `oscura`, `oscura-midnight` | Deep dark base with purple accents. | Yes |
+| **Dracula** | `dracula` | The classic purple/pink-accented Dracula palette. | Yes |
+| **Catppuccin Mocha** | `catppuccin`, `catppuccin-mocha`, `mocha` | Pastel dark theme from the Catppuccin family. | Yes |
 
 Theme names are case-insensitive. The `auto` option (alias `system`) is documented under [Auto Theme (System Appearance)](#auto-theme-system-appearance).
 
