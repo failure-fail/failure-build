@@ -369,6 +369,24 @@ fn explore_toolset() -> ToolServerConfig {
         behavior_preset: None,
     }
 }
+/// Browser-use toolset — navigate/click/type/screenshot/extract-text/close,
+/// plus `ask_user_question` for clarifying which link or page to act on.
+/// No `run_terminal_command`/file-editing tools: this persona's job is web
+/// interaction, not local mutation.
+fn browser_toolset() -> ToolServerConfig {
+    ToolServerConfig {
+        tools: vec![
+            (&grok_build::BrowserNavigateTool).into(),
+            (&grok_build::BrowserClickTool).into(),
+            (&grok_build::BrowserTypeTool).into(),
+            (&grok_build::BrowserGetTextTool).into(),
+            (&grok_build::BrowserScreenshotTool).into(),
+            (&grok_build::BrowserCloseTool).into(),
+            (&grok_build::AskUserQuestionTool).into(),
+        ],
+        behavior_preset: None,
+    }
+}
 /// Plan-mode toolset — read-only inspection tools, no shell, no file-editing.
 ///
 /// Enforces read-only at the toolset: the agent may inspect the repo and keep
@@ -1567,6 +1585,7 @@ impl AgentDefinition {
                  to complete the user's request."
                     .to_string(),
             ),
+            tool_config: browser_toolset(),
             ..Self::base(
                 BuiltinAgentName::BrowserUse,
                 "Web browsing and interaction agent.",

@@ -128,6 +128,12 @@ pub fn canonical_input(input: &ToolInput) -> Option<serde_json::Value> {
         | ToolInput::SchedulerDelete(_)
         | ToolInput::SchedulerList(_)
         | ToolInput::UpdateGoal(_)
+        | ToolInput::BrowserNavigate(_)
+        | ToolInput::BrowserClick(_)
+        | ToolInput::BrowserType(_)
+        | ToolInput::BrowserGetText(_)
+        | ToolInput::BrowserScreenshot(_)
+        | ToolInput::BrowserClose(_)
         | ToolInput::Dynamic(_) => return None,
     })
 }

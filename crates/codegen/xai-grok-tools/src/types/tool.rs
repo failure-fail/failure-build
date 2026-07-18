@@ -100,6 +100,7 @@ pub enum ToolKind {
     UseTool,
     Monitor,
     GoalUpdate,
+    Browser,
     #[serde(other)]
     Other,
 }

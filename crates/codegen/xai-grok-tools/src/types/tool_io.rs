@@ -12,6 +12,10 @@
 //!   `From` derive generates `From<TypedOutput>` for each inner type.
 use crate::implementations::BashToolInput;
 use crate::implementations::codex::apply_patch::tool::ApplyPatchInput;
+use crate::implementations::grok_build::browser::{
+    BrowserClickInput, BrowserCloseInput, BrowserGetTextInput, BrowserNavigateInput,
+    BrowserScreenshotInput, BrowserTypeInput,
+};
 use crate::implementations::codex::grep_files::tool::CodexGrepFilesInput;
 use crate::implementations::codex::list_dir::tool::CodexListDirInput;
 use crate::implementations::codex::read_file::tool::CodexReadFileInput;
@@ -95,6 +99,12 @@ pub enum ToolInput {
     SchedulerDelete(crate::implementations::grok_build::scheduler::delete::SchedulerDeleteInput),
     SchedulerList(crate::implementations::grok_build::scheduler::list::SchedulerListInput),
     UpdateGoal(UpdateGoalInput),
+    BrowserNavigate(BrowserNavigateInput),
+    BrowserClick(BrowserClickInput),
+    BrowserType(BrowserTypeInput),
+    BrowserGetText(BrowserGetTextInput),
+    BrowserScreenshot(BrowserScreenshotInput),
+    BrowserClose(BrowserCloseInput),
     /// Dynamic input for runtime-registered tools (MCP, etc.)
     Dynamic(serde_json::Value),
 }

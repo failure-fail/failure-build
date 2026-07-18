@@ -817,6 +817,7 @@ fn session_grant_pre_decision(
         AccessKind::Read(_)
         | AccessKind::Grep { .. }
         | AccessKind::WebSearch(_)
+        | AccessKind::Browser(_)
         | AccessKind::Edit(_) => None,
     }
 }
@@ -1092,6 +1093,7 @@ fn spawn_permission_manager_with_pin(
                         AccessKind::WebSearch(query) => {
                             ("web_search".to_owned(), Some(query.clone()))
                         }
+                        AccessKind::Browser(action) => ("browser".to_owned(), Some(action.clone())),
                     };
 
                     // `decision_reason` is the trigger (always set); `prompt_outcome` is
@@ -1497,6 +1499,9 @@ fn spawn_permission_manager_with_pin(
                                 }
                             }
                         }
+                        // No allowlist concept for browser actions yet — always
+                        // prompt, same fail-closed default as MCP tools.
+                        AccessKind::Browser(_) => None,
                     };
                     // Auto forced a prompt: neutralize leftover non-bash Allows.
                     // Session grants already short-circuited; bash grants stay gated

@@ -14,6 +14,7 @@ pub(crate) mod query_tools;
 pub mod remap;
 pub mod serde_base64;
 pub mod spawn;
+pub mod ssrf;
 pub mod truncate;
 pub mod unicode_confusables;
 

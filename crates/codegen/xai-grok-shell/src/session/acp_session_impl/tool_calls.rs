@@ -1021,6 +1021,12 @@ impl SessionActor {
                 xai_grok_workspace::permission::AccessKind::WebSearch(q) => {
                     (xai_grok_telemetry::events::AccessKind::Web, q.clone())
                 }
+                // No dedicated telemetry bucket yet — bucketed with Edit since
+                // both are mutating, write-scoped actions; the real action
+                // text still travels in `access_detail`.
+                xai_grok_workspace::permission::AccessKind::Browser(action) => {
+                    (xai_grok_telemetry::events::AccessKind::Edit, action.clone())
+                }
             };
             let subagent_session_id = if self.startup_hints.is_subagent {
                 Some(self.session_id_string())

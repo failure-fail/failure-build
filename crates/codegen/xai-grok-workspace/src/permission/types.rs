@@ -159,6 +159,10 @@ pub enum AccessKind {
     },
     WebFetch(String),
     WebSearch(String),
+    /// A browser automation action (navigate/click/type). The string is a
+    /// short human-readable description of the action, e.g. "navigate to
+    /// https://example.com" or "click 'button#submit'".
+    Browser(String),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decision {
@@ -274,6 +278,18 @@ impl From<&xai_grok_tools::types::ToolInput> for AccessKind {
                 input: u.tool_input.clone(),
             },
             ToolInput::WebFetch(wf) => AccessKind::WebFetch(wf.url.clone()),
+            ToolInput::BrowserNavigate(n) => {
+                AccessKind::Browser(format!("navigate to {}", n.url))
+            }
+            ToolInput::BrowserClick(c) => {
+                AccessKind::Browser(format!("click '{}'", c.selector))
+            }
+            ToolInput::BrowserType(t) => {
+                AccessKind::Browser(format!("type into '{}'", t.selector))
+            }
+            ToolInput::BrowserGetText(_)
+            | ToolInput::BrowserScreenshot(_)
+            | ToolInput::BrowserClose(_) => AccessKind::Read(None),
             ToolInput::Dynamic(_) => AccessKind::Read(None),
             #[allow(unreachable_patterns)]
             _ => AccessKind::Read(None),

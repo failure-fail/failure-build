@@ -681,6 +681,12 @@ impl ToolRegistryBuilder {
         b.register::<grok_build::LspTool>();
         b.register::<grok_build::ImageGenTool>();
         b.register::<grok_build::ImageEditTool>();
+        b.register::<grok_build::BrowserNavigateTool>();
+        b.register::<grok_build::BrowserClickTool>();
+        b.register::<grok_build::BrowserTypeTool>();
+        b.register::<grok_build::BrowserGetTextTool>();
+        b.register::<grok_build::BrowserScreenshotTool>();
+        b.register::<grok_build::BrowserCloseTool>();
         b.register::<grok_build::ImageToVideoTool>();
         b.register::<grok_build::ReferenceToVideoTool>();
         b.register::<grok_build::EnterPlanModeTool>();

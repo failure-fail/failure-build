@@ -123,6 +123,7 @@ blake3 = "1"
 bytes = { version = "1", features = ["serde"] }
 camino = "1.1.10"
 chrono = "0.4"
+chromiumoxide = { version = "0.7", default-features = false, features = ["tokio-runtime"] }
 clap = { version = "4", features = ["derive", "env"] }
 clap_complete = { version = "4" }
 colored_json = "5"

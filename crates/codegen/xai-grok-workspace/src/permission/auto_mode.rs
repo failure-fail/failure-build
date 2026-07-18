@@ -271,7 +271,9 @@ impl HeuristicPermissionClassifier {
             // defense-in-depth fallback so the user is prompted rather than
             // silently auto-approving; non-allowlisted MCP tools land
             // here too.
-            AccessKind::Edit(_) | AccessKind::MCPTool { .. } => ClassifierVerdict::Block,
+            AccessKind::Edit(_) | AccessKind::MCPTool { .. } | AccessKind::Browser(_) => {
+                ClassifierVerdict::Block
+            }
             AccessKind::Read(_) | AccessKind::Grep { .. } | AccessKind::WebSearch(_) => {
                 ClassifierVerdict::Allow
             }
@@ -1086,6 +1088,7 @@ pub fn build_classifier_messages(
         AccessKind::MCPTool { .. } => "mcp",
         AccessKind::WebFetch(_) => "web_fetch",
         AccessKind::WebSearch(_) => "web_search",
+        AccessKind::Browser(_) => "browser",
     };
     let proposed_action =
         format!("tool: {tool_name}\naccess_kind: {access_kind}\ndetail: {detail}");
