@@ -1,8 +1,14 @@
 <div align="center">
 
+<img src="docs/media/social-preview.png" alt="Failure Build — the terminal coding agent that isn't afraid to say it. Bring failure into your terminal." width="100%">
+
 <h1>
   Failure Build (<code>failure</code>)
 </h1>
+
+[![Release](https://github.com/failure-fail/failure-build/actions/workflows/release.yml/badge.svg)](https://github.com/failure-fail/failure-build/actions/workflows/release.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-red.svg)](LICENSE)
+[![Built with Rust](https://img.shields.io/badge/built%20with-Rust-red.svg)](https://www.rust-lang.org)
 
 **Failure Build** is a terminal-based AI coding agent, forked from xAI's
 open-sourced Grok Build. It runs as a full-screen TUI that understands your
