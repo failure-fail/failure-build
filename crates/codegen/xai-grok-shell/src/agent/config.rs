@@ -5071,6 +5071,12 @@ pub fn to_acp_model_info(
                         reasoning_efforts_meta_value(&info.reasoning_efforts),
                     );
                 }
+                if let Some(provider) = &info.provider {
+                    map.insert(
+                        crate::sampling::types::PROVIDER_META_KEY.to_string(),
+                        serde_json::Value::String(provider.clone()),
+                    );
+                }
                 if map.is_empty() { None } else { Some(map) }
             };
             (

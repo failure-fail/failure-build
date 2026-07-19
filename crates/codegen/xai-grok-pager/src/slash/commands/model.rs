@@ -150,31 +150,41 @@ fn detect_effort_phase(models: &ModelState, args_query: &str) -> Option<acp::Mod
 
 /// One row per logical model. Reasoning models get a trailing space in
 /// `insert_text` so the prompt widget chains into the effort sub-menu.
+///
+/// Merging every configured provider's catalog means two providers can
+/// legitimately expose a model under the same display name (e.g. both
+/// calling it "Llama 3"). The underlying catalog keys are always distinct
+/// (see `models.rs`'s BYOP merge), but a bare `/model Llama 3` would still
+/// be ambiguous to a human, so a name shared by more than one entry gets
+/// its provider folded in as part of the name itself here.
 fn build_model_items(models: &ModelState) -> Vec<ArgItem> {
+    let mut name_counts: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
+    for info in models.available.values() {
+        *name_counts.entry(info.name.as_str()).or_insert(0) += 1;
+    }
+
     let current_id = models.current.as_ref();
     let mut items: Vec<ArgItem> = Vec::with_capacity(models.available.len());
     for (id, info) in &models.available {
         let is_current = current_id == Some(id);
         let supports = supports_reasoning_effort(info);
 
-        let display = if is_current {
-            format!("{} (current)", info.name)
+        let name = if name_counts.get(info.name.as_str()).copied().unwrap_or(0) > 1 {
+            format!("{} ({})", info.name, crate::acp::model_state::provider_tag_for(info))
         } else {
             info.name.clone()
         };
+
+        let display = if is_current { format!("{name} (current)") } else { name.clone() };
 
         // Trailing space on reasoning models: signals "more input
         // expected" to the prompt widget so Enter advances to effort
         // phase instead of submitting.
-        let insert_text = if supports {
-            format!("{} ", info.name)
-        } else {
-            info.name.clone()
-        };
+        let insert_text = if supports { format!("{name} ") } else { name.clone() };
 
         items.push(ArgItem {
             display,
-            match_text: info.name.clone(),
+            match_text: name,
             insert_text,
             description: info.description.clone().unwrap_or_default(),
         });
