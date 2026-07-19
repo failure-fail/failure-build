@@ -1501,9 +1501,18 @@ fn prefetch_models_blocking_gated(
         match crate::remote::fetch_extra_models_blocking(source) {
             Ok(FetchModelsResult { models, .. }) if !models.is_empty() => {
                 byop_succeeded = true;
+                let source_tag = byop_source_tag(&source.base_url);
                 for m in models {
                     let key = m.id.clone().unwrap_or_else(|| m.model.clone());
-                    let info = config::ModelInfo::from_config(&m);
+                    let key = disambiguate_colliding_key(&map, key, &source_tag);
+                    let mut info = config::ModelInfo::from_config(&m);
+                    // Config-resolved models get `provider` from a named
+                    // `[provider.*]` block (see `ModelInfo::from_config`);
+                    // models merged straight from a live BYOP fetch have no
+                    // such block to inherit it from, so stamp it here --
+                    // the picker uses this to disambiguate same-named
+                    // models from different sources.
+                    info.provider.get_or_insert_with(|| source_tag.clone());
                     let api_base_url = m.api_base_url.clone().or_else(|| Some(source.base_url.clone()));
                     map.insert(
                         key,
@@ -1544,6 +1553,36 @@ fn prefetch_models_blocking_gated(
     tracing::info!(count = map.len(), etag = ?etag, "Prefetched models");
     cache.persist(&map, etag.as_deref(), cache_auth, &cache_origin);
     Some(map)
+}
+
+/// If `key` already names an entry in `map` (from the primary catalog or an
+/// earlier BYOP source), rename it to `"<key> (<source_tag>)"` instead of
+/// letting the insert silently overwrite -- and lose access to -- whichever
+/// model got there first. Two providers exposing a model under the
+/// identical slug (e.g. both serving `"llama3"`) is a real, not theoretical,
+/// case now that every configured provider's catalog merges into one map.
+fn disambiguate_colliding_key(
+    map: &IndexMap<String, ModelEntry>,
+    key: String,
+    source_tag: &str,
+) -> String {
+    if map.contains_key(&key) {
+        format!("{key} ({source_tag})")
+    } else {
+        key
+    }
+}
+
+/// Short, human-readable tag for a BYOP source, used to disambiguate a
+/// same-named model key and to label it in the model picker. The host is
+/// the best available stand-in for a provider display name at this point:
+/// the provider's own config-level name (e.g. `"ollama"`) doesn't survive
+/// into `ByopModelsSource`, which only carries what a live fetch needs.
+fn byop_source_tag(base_url: &str) -> String {
+    url::Url::parse(base_url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_owned))
+        .unwrap_or_else(|| base_url.to_string())
 }
 
 /// Cache identity for a models-list fetch: the primary source URL plus every
@@ -3671,5 +3710,31 @@ mod tests {
                 (id.clone(), acp::ModelInfo::new(id, (*k).to_string()))
             })
             .collect()
+    }
+
+    #[test]
+    fn byop_source_tag_uses_host() {
+        assert_eq!(byop_source_tag("https://ollama.example.com:11434/v1"), "ollama.example.com");
+        // Unparseable input falls back to the raw string rather than panicking.
+        assert_eq!(byop_source_tag("not a url"), "not a url");
+    }
+
+    #[test]
+    fn disambiguate_colliding_key_renames_on_collision() {
+        let mut map = IndexMap::new();
+        map.insert("llama3".to_string(), make_model_entry("llama3"));
+
+        // No collision: key passes through unchanged.
+        assert_eq!(
+            disambiguate_colliding_key(&map, "mixtral".to_string(), "ollama.example.com"),
+            "mixtral"
+        );
+
+        // Regression: two providers exposing a model under the identical
+        // slug must not silently overwrite one another in the merged
+        // catalog -- the second one gets a distinct, still-selectable key.
+        let renamed = disambiguate_colliding_key(&map, "llama3".to_string(), "ollama.example.com");
+        assert_eq!(renamed, "llama3 (ollama.example.com)");
+        assert_ne!(renamed, "llama3", "must not collide with the existing entry");
     }
 }

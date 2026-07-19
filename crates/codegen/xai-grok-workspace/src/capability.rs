@@ -104,6 +104,7 @@ pub(crate) const ALL_TOOL_KINDS: &[ToolKind] = &[
     ToolKind::Monitor,
     ToolKind::GoalUpdate,
     ToolKind::Browser,
+    ToolKind::Git,
     ToolKind::Other,
 ];
 
@@ -149,8 +150,9 @@ pub(crate) fn kind_allowed(mode: CapabilityMode, kind: ToolKind) -> bool {
         Edit | Write | Delete | Move | ImageGen | VideoGen | ImageToVideo | ReferenceToVideo
         | DeployApp | Browser => matches!(mode, M::ReadWrite),
 
-        // Bash / shell.
-        Execute => matches!(mode, M::Execute),
+        // Bash / shell. Git shells out to a subprocess the same way, so it
+        // needs the same Execute capability rather than Edit/Write.
+        Execute | Git => matches!(mode, M::Execute),
 
         // Process control (background tasks, monitors).
         BackgroundTaskAction | WaitTasksAction | KillTaskAction | Task | Monitor => {

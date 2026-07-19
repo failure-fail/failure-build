@@ -286,6 +286,10 @@ fn default_grok_build_toolset() -> ToolServerConfig {
             (&grok_build::BrowserGetTextTool).into(),
             (&grok_build::BrowserScreenshotTool).into(),
             (&grok_build::BrowserCloseTool).into(),
+            (&grok_build::GitStatusTool).into(),
+            (&grok_build::GitDiffTool).into(),
+            (&grok_build::GitLogTool).into(),
+            (&grok_build::GitCommitTool).into(),
         ],
         behavior_preset: None,
     }

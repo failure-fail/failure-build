@@ -46,6 +46,16 @@ impl EffortTokenError {
     }
 }
 
+/// Display tag for the provider a model was merged in from (e.g.
+/// `"ollama"`, from a live BYOP fetch's `provider` meta key), or `"xAI"`
+/// for x.ai's own models, which carry no such meta. Used both to label a
+/// same-named model in the `/model` picker and to resolve the tagged form
+/// back to a `ModelId` in [`ModelState::resolve_by_name_or_id`].
+pub(crate) fn provider_tag_for(info: &acp::ModelInfo) -> String {
+    xai_grok_shell::sampling::types::parse_provider_meta(info.meta.as_ref())
+        .unwrap_or_else(|| "xAI".to_string())
+}
+
 /// Per-agent model state.
 #[derive(Debug, Clone, Default)]
 pub struct ModelState {
@@ -272,14 +282,17 @@ impl ModelState {
     }
 
     /// Resolve a user-supplied name to a `ModelId` via case-insensitive
-    /// ASCII match against the catalog.
+    /// ASCII match against the catalog: a bare name, the raw model id, or
+    /// (when the name alone is ambiguous across providers) the
+    /// `"<name> (<provider>)"` form the picker inserts for those entries —
+    /// see [`provider_tag_for`].
     pub fn resolve_by_name_or_id(&self, query: &str) -> Option<acp::ModelId> {
         self.available.iter().find_map(|(id, info)| {
             if info.name.eq_ignore_ascii_case(query) || id.0.as_ref().eq_ignore_ascii_case(query) {
-                Some(id.clone())
-            } else {
-                None
+                return Some(id.clone());
             }
+            let tagged = format!("{} ({})", info.name, provider_tag_for(info));
+            tagged.eq_ignore_ascii_case(query).then(|| id.clone())
         })
     }
 

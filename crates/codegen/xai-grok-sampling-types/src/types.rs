@@ -888,6 +888,17 @@ pub fn reasoning_effort_meta_value(effort: ReasoningEffort) -> serde_json::Value
 
 pub const REASONING_EFFORTS_META_KEY: &str = "reasoningEfforts";
 
+/// Named `[provider.*]` profile a model resolved from (e.g. `"ollama"`), so
+/// UI surfaces can disambiguate models with the same display name fetched
+/// from different BYOP providers. Absent for xAI's own, unnamed models.
+pub const PROVIDER_META_KEY: &str = "provider";
+
+/// Returns `None` on a missing key or type-mismatch (never fatal — the model
+/// is just shown without a provider tag).
+pub fn parse_provider_meta(meta: Option<&serde_json::Map<String, serde_json::Value>>) -> Option<String> {
+    meta?.get(PROVIDER_META_KEY)?.as_str().map(str::to_owned)
+}
+
 /// A single selectable reasoning-effort option for a model. `id`/`label` are
 /// presentation and input; `value` is the canonical value sent on the wire.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

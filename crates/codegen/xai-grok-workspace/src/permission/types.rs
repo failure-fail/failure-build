@@ -278,22 +278,56 @@ impl From<&xai_grok_tools::types::ToolInput> for AccessKind {
                 input: u.tool_input.clone(),
             },
             ToolInput::WebFetch(wf) => AccessKind::WebFetch(wf.url.clone()),
-            ToolInput::BrowserNavigate(n) => {
-                AccessKind::Browser(format!("navigate to {}", n.url))
+            ToolInput::BrowserNavigate(n) => AccessKind::Browser(format!("navigate to {}", n.url)),
+            ToolInput::BrowserClick(c) => AccessKind::Browser(format!("click '{}'", c.selector)),
+            ToolInput::BrowserType(t) => AccessKind::Browser(format!("type into '{}'", t.selector)),
+            ToolInput::BrowserGetText(g) => AccessKind::Browser(match &g.selector {
+                Some(sel) => format!("read text from '{sel}'"),
+                None => "read page text".to_string(),
+            }),
+            ToolInput::BrowserScreenshot(_) => AccessKind::Browser("take a screenshot".to_string()),
+            ToolInput::BrowserClose(_) => AccessKind::Browser("close the browser".to_string()),
+            // git_status/diff/log/commit map to AccessKind::Bash with a
+            // reconstructed display command (never actually executed via a
+            // shell -- the tools always call `Command::args`) so they get
+            // exactly the same auto-mode classification and prompt copy
+            // that shelling out to the same git commands already gets.
+            ToolInput::GitStatus(s) => AccessKind::Bash(git_command_with_paths(
+                "git status --short --branch",
+                &s.paths,
+            )),
+            ToolInput::GitDiff(d) => {
+                let base = if d.staged {
+                    "git diff --staged"
+                } else {
+                    "git diff"
+                };
+                AccessKind::Bash(git_command_with_paths(base, &d.paths))
             }
-            ToolInput::BrowserClick(c) => {
-                AccessKind::Browser(format!("click '{}'", c.selector))
+            ToolInput::GitLog(l) => AccessKind::Bash(git_command_with_paths(
+                &format!("git log --oneline -n {}", l.limit),
+                &l.paths,
+            )),
+            ToolInput::GitCommit(c) => {
+                let stage = if c.paths.is_empty() {
+                    "git add -A".to_string()
+                } else {
+                    git_command_with_paths("git add", &c.paths)
+                };
+                AccessKind::Bash(format!("{stage} && git commit -m '{}'", c.message))
             }
-            ToolInput::BrowserType(t) => {
-                AccessKind::Browser(format!("type into '{}'", t.selector))
-            }
-            ToolInput::BrowserGetText(_)
-            | ToolInput::BrowserScreenshot(_)
-            | ToolInput::BrowserClose(_) => AccessKind::Read(None),
             ToolInput::Dynamic(_) => AccessKind::Read(None),
             #[allow(unreachable_patterns)]
             _ => AccessKind::Read(None),
         }
+    }
+}
+/// Append ` -- <paths>` to a git command for permission-prompt display, if any paths were given.
+fn git_command_with_paths(base: &str, paths: &[String]) -> String {
+    if paths.is_empty() {
+        base.to_string()
+    } else {
+        format!("{base} -- {}", paths.join(" "))
     }
 }
 /// Permission policy configuration (duplicated from util/config.rs for Phase 1 move independence; identical).
@@ -635,6 +669,89 @@ mod tests {
         assert!(
             matches!(access, AccessKind::Edit(ref p) if p == "/tmp/secret.txt"),
             "Write should produce AccessKind::Edit with the file path, got {access:?}"
+        );
+    }
+    #[test]
+    fn browser_read_tools_map_to_browser_access_not_read() {
+        // Regression: BrowserGetText/Screenshot/Close previously mapped to
+        // AccessKind::Read(None), which auto-allows in every permission
+        // mode (including the default Ask mode) -- silently skipping the
+        // user prompt that browser_navigate/click/type correctly get, even
+        // though these tools can exfiltrate whatever the tab last loaded.
+        use xai_grok_tools::implementations::grok_build::browser::{
+            BrowserCloseInput, BrowserGetTextInput, BrowserScreenshotInput,
+        };
+        use xai_grok_tools::types::ToolInput;
+
+        let get_text = ToolInput::BrowserGetText(BrowserGetTextInput {
+            selector: Some("main".into()),
+        });
+        assert!(
+            matches!(AccessKind::from(&get_text), AccessKind::Browser(_)),
+            "BrowserGetText should produce AccessKind::Browser, got {:?}",
+            AccessKind::from(&get_text)
+        );
+
+        let screenshot = ToolInput::BrowserScreenshot(BrowserScreenshotInput { full_page: false });
+        assert!(
+            matches!(AccessKind::from(&screenshot), AccessKind::Browser(_)),
+            "BrowserScreenshot should produce AccessKind::Browser, got {:?}",
+            AccessKind::from(&screenshot)
+        );
+
+        let close = ToolInput::BrowserClose(BrowserCloseInput {});
+        assert!(
+            matches!(AccessKind::from(&close), AccessKind::Browser(_)),
+            "BrowserClose should produce AccessKind::Browser, got {:?}",
+            AccessKind::from(&close)
+        );
+    }
+    #[test]
+    fn git_tools_map_to_bash_access_with_reconstructed_command() {
+        // git_* tools reuse AccessKind::Bash rather than a new permission
+        // category, so they inherit the exact classification/prompt copy
+        // that shelling out to the same git commands already gets.
+        use xai_grok_tools::implementations::grok_build::git::{
+            GitCommitInput, GitDiffInput, GitLogInput, GitStatusInput,
+        };
+        use xai_grok_tools::types::ToolInput;
+
+        let status = ToolInput::GitStatus(GitStatusInput { paths: vec![] });
+        assert!(
+            matches!(AccessKind::from(&status), AccessKind::Bash(ref c) if c == "git status --short --branch"),
+            "got {:?}",
+            AccessKind::from(&status)
+        );
+
+        let diff = ToolInput::GitDiff(GitDiffInput {
+            staged: true,
+            paths: vec!["src/lib.rs".into()],
+            context_lines: 3,
+        });
+        assert!(
+            matches!(AccessKind::from(&diff), AccessKind::Bash(ref c) if c == "git diff --staged -- src/lib.rs"),
+            "got {:?}",
+            AccessKind::from(&diff)
+        );
+
+        let log = ToolInput::GitLog(GitLogInput {
+            limit: 10,
+            paths: vec![],
+        });
+        assert!(
+            matches!(AccessKind::from(&log), AccessKind::Bash(ref c) if c == "git log --oneline -n 10"),
+            "got {:?}",
+            AccessKind::from(&log)
+        );
+
+        let commit = ToolInput::GitCommit(GitCommitInput {
+            message: "fix bug".into(),
+            paths: vec![],
+        });
+        assert!(
+            matches!(AccessKind::from(&commit), AccessKind::Bash(ref c) if c == "git add -A && git commit -m 'fix bug'"),
+            "got {:?}",
+            AccessKind::from(&commit)
         );
     }
     #[test]
