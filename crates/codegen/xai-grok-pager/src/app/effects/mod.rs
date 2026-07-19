@@ -1909,6 +1909,15 @@ pub(crate) fn execute(
                 TaskResult::ModelCatalogRefreshed { result }
             });
         }
+        Effect::McpBridgeStart { port, token } => {
+            let cwd = cwd.to_path_buf();
+            tasks.spawn(async move {
+                let result = crate::mcp_bridge::start(port, token, cwd)
+                    .await
+                    .map_err(|e| e.to_string());
+                TaskResult::McpBridgeStarted { result }
+            });
+        }
         Effect::PersistPermissionMode { canonical, session_id, persist } => {
             let tx = acp_tx.clone();
             tasks

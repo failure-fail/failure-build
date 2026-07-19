@@ -467,6 +467,29 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        TaskResult::McpBridgeStarted { result } => {
+            if let Some(agent) = get_active_agent_mut(app) {
+                let message = match result {
+                    Ok(status) => {
+                        let mut msg = format!(
+                            "MCP bridge running.\nLocal:  {}",
+                            status.local_url.as_deref().unwrap_or("?")
+                        );
+                        match &status.public_url {
+                            Some(public) => msg.push_str(&format!("\nPublic: {public}")),
+                            None => msg.push_str(
+                                "\nNo public URL (install `cloudflared` for one, or \
+                                 `/mcp-worker configure` for a stable URL).",
+                            ),
+                        }
+                        msg
+                    }
+                    Err(err) => format!("Couldn't start the MCP bridge: {err}"),
+                };
+                agent.scrollback.push_block(RenderBlock::system(message));
+            }
+            vec![]
+        }
         TaskResult::CancelComplete => {
             tracing::trace!("Cancel notification sent successfully");
             vec![]

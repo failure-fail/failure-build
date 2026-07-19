@@ -422,6 +422,20 @@ Open the MCP servers management modal.
 /mcps
 ```
 
+### `/mcp start|status|stop`
+
+Run the native remote MCP bridge directly inside the binary -- no Node/npm required. Starting it spawns a dedicated always-approve agent instance and a local Streamable HTTP MCP server (default port 2420) exposing `failure_new_chat`, `failure_continue_chat`, `failure_send_message`, `failure_list_sessions`, `failure_status`, and a scoped `failure_rpc` for `x.ai/*` extension methods. The local URL (with its access token) is printed straight into scrollback and written to `~/.failure/mcp.json`; when `cloudflared` is installed, a Cloudflare Quick Tunnel also provides a public URL. Paste either URL into Claude or another remote MCP client.
+
+```
+/mcp start
+/mcp start 8080
+/mcp start 8080 my-fixed-token
+/mcp status
+/mcp stop
+```
+
+Treat the URL as a password: remote callers can direct Failure to edit files and run commands. The bridge's sessions run in always-approve mode.
+
 ### `/mcp-worker configure <cloudflare-api-token> [worker-name] [account-id]`
 
 Save Cloudflare Worker credentials for a stable remote-MCP URL, without leaving the session. Only available when running the npm package (`@failure-build/failure`), since deploying the Worker and running the local MCP bridge and Cloudflare Quick Tunnel are handled by its Node.js launcher, not the Rust binary directly -- this command just validates the token and writes `~/.failure/cloudflare-worker.json`, the same file the npm wrapper reads on its next launch. Equivalent to running `failure mcp-worker configure` outside the session.

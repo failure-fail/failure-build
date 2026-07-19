@@ -38,6 +38,11 @@ Add a custom provider without leaving a running session with `/provider add <nam
 
 ## Remote MCP control
 
+> **No npm?** The Rust binary itself can now run an equivalent bridge with
+> the `/mcp start` slash command inside a session — no Node required. The
+> npm launcher described below remains the zero-setup path (it starts the
+> bridge automatically on every launch).
+
 The npm launcher automatically starts a Streamable HTTP MCP bridge whenever
 Failure is running interactively. The bridge exposes Failure's built-in ACP
 agent API, so clients such as Claude can create chats, load existing chats,

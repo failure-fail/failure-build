@@ -8660,12 +8660,16 @@ checksum = "f00a32c3b81b7b254076a65abd5ab2551209146713ba38f73818657e865e9433"
 dependencies = [
  "async-trait",
  "base64",
+ "bytes",
  "chrono",
  "futures",
  "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
  "oauth2",
  "pastey",
  "pin-project-lite",
+ "rand 0.10.0",
  "reqwest 0.13.4",
  "rmcp-macros",
  "schemars 1.0.4",
@@ -8676,8 +8680,10 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+ "tower-service",
  "tracing",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -13379,6 +13385,7 @@ dependencies = [
  "agent-client-protocol",
  "ansi-to-tui",
  "anyhow",
+ "axum",
  "backon",
  "base64",
  "blake3",
@@ -13407,6 +13414,7 @@ dependencies = [
  "rand 0.9.2",
  "ratatui",
  "regex",
+ "rmcp",
  "rustls",
  "serde",
  "serde_json",

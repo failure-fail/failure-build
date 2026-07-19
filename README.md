@@ -19,7 +19,8 @@ scripting/CI, or embedded in editors via the Agent Client Protocol (ACP). Unlike
 x.ai's Grok models, OpenAI, Anthropic, Ollama, or any custom
 OpenAI-compatible endpoint — configurable via CLI flags, the `/provider`
 slash command, or `config.toml`, with the full model catalog from every
-configured provider merged in automatically.
+configured provider merged in automatically. It can also serve itself to
+remote MCP clients (like Claude) via the built-in `/mcp start` bridge.
 
 [Installing the released binary](#installing-the-released-binary) ·
 [Building from source](#building-from-source) ·

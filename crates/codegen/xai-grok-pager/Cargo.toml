@@ -97,6 +97,13 @@ xai-grok-config = { workspace = true }
 xai-grok-voice = { path = "../xai-grok-voice", default-features = false, features = ["audio"] }
 xai-grok-shell = { workspace = true }
 xai-grok-workspace = { workspace = true }
+# Native remote MCP bridge (`/mcp start`): rmcp's server-side Streamable HTTP
+# support, mounted on axum. Server-only features (no `client`/`reqwest`), so
+# this doesn't reintroduce the reqwest 0.13 pin xai-grok-mcp quarantines for
+# rmcp's client transport — pinned to the same rmcp version so Cargo unifies
+# the two crates' feature sets onto one dependency.
+rmcp = { version = "2.1", features = ["server", "transport-streamable-http-server", "macros"] }
+axum = { workspace = true }
 xai-token-estimation = { workspace = true }
 xai-grok-telemetry = { workspace = true }
 xai-fast-worktree = { path = "../xai-fast-worktree", features = ["metadata"] }

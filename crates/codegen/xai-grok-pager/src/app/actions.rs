@@ -565,6 +565,14 @@ pub enum Action {
     /// The refreshed catalog arrives asynchronously via the existing
     /// `x.ai/models/update` notification — this action doesn't wait on it.
     RefreshModelCatalog,
+    /// `/mcp start [port] [token]`. Starts the native, in-process remote MCP
+    /// bridge (`crate::mcp_bridge`) — no Node/npm required. `/mcp status`
+    /// and `/mcp stop` are handled synchronously inline in the slash command
+    /// itself and never reach this Action.
+    McpBridgeStart {
+        port: Option<u16>,
+        token: Option<String>,
+    },
     /// Commit the max-thoughts-width (column budget for the thoughts panel).
     /// Payload is `i64`; clamped to `u16` at the shell helper boundary.
     SetMaxThoughtsWidth(i64),
@@ -1586,6 +1594,11 @@ pub enum Effect {
     /// Ask the shell to re-sync config and live-refetch the model catalog
     /// (`Action::RefreshModelCatalog` / `/model` picker open).
     RefreshModelCatalog,
+    /// Start the native MCP bridge (`Action::McpBridgeStart` / `/mcp start`).
+    McpBridgeStart {
+        port: Option<u16>,
+        token: Option<String>,
+    },
     /// Persist the permission mode to config.toml and notify the agent
     /// via ACP. See [`PermissionModePersist`] for rollback semantics.
     PersistPermissionMode {
@@ -2297,6 +2310,10 @@ pub enum TaskResult {
     /// catalog itself lands separately via `x.ai/models/update`) — only
     /// logged on failure, since the picker already shows the last-known list.
     ModelCatalogRefreshed { result: Result<usize, String> },
+    /// `Effect::McpBridgeStart` completed (`/mcp start`).
+    McpBridgeStarted {
+        result: Result<crate::mcp_bridge::BridgeStatus, String>,
+    },
     /// Manual `/compact` command completed.
     CompactComplete {
         agent_id: AgentId,
