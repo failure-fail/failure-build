@@ -133,6 +133,49 @@ This is a small, fixed set of environment-wide knobs. Settings that identify a s
 
 ---
 
+## Named Providers
+
+Instead of repeating `base_url`/`api_key`/`api_backend`/`auth_scheme` on every `[model.*]` entry, define a reusable `[provider.*]` block once and reference it by name:
+
+```toml
+[provider.acme]
+base_url = "https://api.acme.com/v1"
+
+[model.acme-model]
+provider = "acme"
+model = "acme-large"
+```
+
+A model referencing a `provider` inherits its `base_url`, `api_key`, `env_key`, `api_base_url`, `api_backend`, `auth_scheme`, `extra_headers`, and `context_window`; any field also set directly on the `[model.*]` entry wins. Four built-in presets are always available by name, so you don't need to define them yourself: `xai`, `openai` (`https://api.openai.com/v1`), `anthropic` (`https://api.anthropic.com/v1`, `x_api_key` auth), and `ollama` (`http://localhost:11434/v1`). A `[provider.openai]` block in your own config overrides the built-in preset.
+
+### CLI Flags
+
+```bash
+failure --provider openai --api-key sk-... --base-url https://api.openai.com/v1
+```
+
+`--base-url` is optional for the built-in presets. `--model` selects which `[model.*]` key the flags apply to; without it, Failure creates an ephemeral `byop` entry for the invocation. This is ephemeral (not persisted) — for a stored provider, use `/provider add` or edit `config.toml` directly.
+
+### `/provider add` Slash Command
+
+Configure a provider from inside a running session, without hand-editing `config.toml`:
+
+```
+/provider add <name> <api-key> [base-url]
+```
+
+`base-url` is required unless `<name>` is one of the built-in presets. This persists `[provider.<name>]`/`[model.<name>]` to `config.toml` and stores the API key via the same secure, provider-scoped storage `failure login --provider` uses (not written to `config.toml` in plain text). For example:
+
+```
+/provider add acme sk-acme-key https://api.acme.com/v1
+```
+
+### Automatic Model Catalog Refresh
+
+On every launch, Failure fetches the live model list from x.ai **and** from every configured `[provider.*]`'s own `{base_url}/models` endpoint (if it implements one), merging all of them into one catalog — you don't need to hand-list every model your provider offers. If a provider's live fetch fails (network issue, or it simply doesn't expose a `/models` endpoint), any model you defined explicitly in `[model.*]` still appears; only the *additional* models that endpoint would have contributed are missing until the fetch succeeds.
+
+---
+
 ## Overriding Built-in Models
 
 You can override specific fields of built-in models without redefining everything. Only specify the fields you want to change:

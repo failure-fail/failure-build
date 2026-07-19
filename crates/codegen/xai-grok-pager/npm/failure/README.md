@@ -34,6 +34,8 @@ API key from [console.x.ai](https://console.x.ai):
 export XAI_API_KEY="xai-..."
 ```
 
+Add a custom provider without leaving a running session with `/provider add <name> <api-key> [base-url]` — see the [Custom Models guide](https://github.com/failure-fail/failure-build/blob/main/crates/codegen/xai-grok-pager/docs/user-guide/11-custom-models.md) for details. Failure fetches each configured provider's own model list on every launch and merges it with x.ai's, so you don't need to hand-list every model it offers.
+
 ## Remote MCP control
 
 The npm launcher automatically starts a Streamable HTTP MCP bridge whenever
@@ -68,6 +70,8 @@ Configure it interactively:
 ```bash
 failure mcp-worker configure
 ```
+
+Or save credentials from inside a running session with `/mcp-worker configure <token> [worker-name] [account-id]` — the npm launcher's next start picks up what's saved and does the actual deploy.
 
 Failure asks for:
 

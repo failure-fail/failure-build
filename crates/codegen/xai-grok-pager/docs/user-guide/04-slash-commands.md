@@ -138,6 +138,15 @@ Switch to a different model. Accepts model IDs or display names (case-insensitiv
 
 Aliases: `/m`
 
+### `/provider add <name> <api-key> [base-url]`
+
+Configure a custom (BYOP) provider -- OpenAI, Anthropic, Ollama, or any OpenAI-compatible endpoint -- without hand-editing `config.toml`. `base-url` is required unless `<name>` is a built-in preset (`xai`, `openai`, `anthropic`, `ollama`). Persists `[provider.<name>]`/`[model.<name>]` to `config.toml` and stores the API key via the same secure storage `failure login --provider` uses. See [11-custom-models.md](11-custom-models.md) for details.
+
+```
+/provider add openai sk-...
+/provider add acme sk-acme-key https://api.acme.com/v1
+```
+
 ### `/effort <level>`
 
 Set reasoning effort on the **current** model without re-selecting it. Levels: `low`, `medium`, `high`, `xhigh`. Only works when the active model supports reasoning effort.
@@ -411,6 +420,16 @@ Open the MCP servers management modal.
 
 ```
 /mcps
+```
+
+### `/mcp-worker configure <cloudflare-api-token> [worker-name] [account-id]`
+
+Save Cloudflare Worker credentials for a stable remote-MCP URL, without leaving the session. Only available when running the npm package (`@failure-build/failure`), since deploying the Worker and running the local MCP bridge and Cloudflare Quick Tunnel are handled by its Node.js launcher, not the Rust binary directly -- this command just validates the token and writes `~/.failure/cloudflare-worker.json`, the same file the npm wrapper reads on its next launch. Equivalent to running `failure mcp-worker configure` outside the session.
+
+```
+/mcp-worker configure <token>
+/mcp-worker status
+/mcp-worker disable
 ```
 
 ### `/terminal-setup`
