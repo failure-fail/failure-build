@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Failure Build changelog feed.
+
+  Hand-edited, not generated: add one <item> per user-facing feature or
+  bug fix, newest first, right after the commit that ships it. This is
+  a deliberate curation layer over `git log`, since most commits
+  (refactors, internal fixes, doc tweaks) don't belong here; only
+  things a user of the CLI would actually want to know about do.
+
+  Subscribe via the raw URL:
+    https://raw.githubusercontent.com/failure-fail/failure-build/main/docs/feed.xml
+  (GitHub serves raw .xml as text/plain, not application/rss+xml, so
+  most feed readers accept it anyway since they sniff content, not
+  just the header, but a strict reader may need the URL added manually
+  rather than via feed auto-discovery.)
+-->
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Failure Build — Changelog</title>
+    <link>https://github.com/failure-fail/failure-build</link>
+    <description>New features and bug fixes in Failure Build, the terminal coding agent forked from xAI's Grok Build.</description>
+    <language>en-us</language>
+    <atom:link href="https://raw.githubusercontent.com/failure-fail/failure-build/main/docs/feed.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Sun, 19 Jul 2026 08:29:01 GMT</lastBuildDate>
+
+    <item>
+      <title>Fix: BYOP models could silently overwrite each other in the /model picker</title>
+      <link>https://github.com/failure-fail/failure-build/commit/ed3f5f1</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/ed3f5f1</guid>
+      <pubDate>Sun, 19 Jul 2026 08:29:01 GMT</pubDate>
+      <description><![CDATA[
+        Merging every configured provider's model catalog into one list had a real bug: two providers exposing a model under the identical slug (e.g. both serving <code>llama3</code>) would silently overwrite one another — one provider's model just disappearing, not merely a display mix-up. Fixed the merge to keep both, and the <code>/model</code> picker now labels a model with its provider only when its name actually collides with another one, e.g. <code>Llama 3 (ollama.example.com)</code>.
+      ]]></description>
+    </item>
+
+    <item>
+      <title>New: a structured git tool (status / diff / log / commit)</title>
+      <link>https://github.com/failure-fail/failure-build/commit/c55ddb8</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/c55ddb8</guid>
+      <pubDate>Sun, 19 Jul 2026 07:26:27 GMT</pubDate>
+      <description><![CDATA[
+        The agent can now run <code>git_status</code>, <code>git_diff</code>, <code>git_log</code>, and <code>git_commit</code> as typed tools instead of hand-quoting shell commands through the terminal tool. Read-only git commands stay auto-approved exactly like they already were for the terminal tool; <code>git_commit</code> still prompts like running <code>git commit</code> directly would.
+      ]]></description>
+    </item>
+
+    <item>
+      <title>Fix: browser tool permission bypass + redirect-based SSRF gap</title>
+      <link>https://github.com/failure-fail/failure-build/commit/ed3d466</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/ed3d466</guid>
+      <pubDate>Sun, 19 Jul 2026 06:56:09 GMT</pubDate>
+      <description><![CDATA[
+        A security review of the newly-added browser automation tools found that <code>browser_get_text</code>, <code>browser_screenshot</code>, and <code>browser_close</code> skipped the permission prompt entirely — once any navigation was approved once, the model could keep reading page content afterward with zero visibility. Fixed the permission mapping, and added a re-check after redirects/clicks so a navigation that lands on a blocked internal address (like a cloud metadata endpoint) can't have its content read afterward. Also added timeouts so a hung page can't wedge a tool call indefinitely.
+      ]]></description>
+    </item>
+
+    <item>
+      <title>New: /mcp-worker configure — save Cloudflare Worker credentials from inside a session</title>
+      <link>https://github.com/failure-fail/failure-build/commit/9e7e879</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/9e7e879</guid>
+      <pubDate>Sun, 19 Jul 2026 04:26:39 GMT</pubDate>
+      <description><![CDATA[
+        The stable <code>workers.dev</code> URL feature for remote MCP access previously required a separate <code>failure mcp-worker configure</code> CLI invocation. <code>/mcp-worker configure &lt;token&gt; [worker-name] [account-id]</code> does the same credential setup without leaving a running session.
+      ]]></description>
+    </item>
+
+    <item>
+      <title>New: browser tools are built in, plus /provider to add a custom model provider in-session</title>
+      <link>https://github.com/failure-fail/failure-build/commit/2db820a</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/2db820a</guid>
+      <pubDate>Sun, 19 Jul 2026 01:57:22 GMT</pubDate>
+      <description><![CDATA[
+        Browser automation (navigate, click, type, screenshot, read text) is now part of the default toolset, not just the separate <code>browser-use</code> persona. <code>/provider add &lt;name&gt; &lt;api-key&gt; [base-url]</code> adds a bring-your-own-provider (OpenAI, Anthropic, Ollama, or any custom OpenAI-compatible endpoint) without editing <code>config.toml</code> by hand.
+      ]]></description>
+    </item>
+
+    <item>
+      <title>New: browser automation — navigate, click, type, screenshot, read page text</title>
+      <link>https://github.com/failure-fail/failure-build/commit/6f71f9e</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/6f71f9e</guid>
+      <pubDate>Sat, 18 Jul 2026 23:26:15 GMT</pubDate>
+      <description><![CDATA[
+        A real headless Chrome/Chromium browser the agent can drive directly — no chromedriver or Playwright dependency. Every navigation is checked against private/internal addresses before the browser is ever allowed to load it.
+      ]]></description>
+    </item>
+
+    <item>
+      <title>New: merge every configured provider's models into one catalog, not just one</title>
+      <link>https://github.com/failure-fail/failure-build/commit/9ec4c60</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/9ec4c60</guid>
+      <pubDate>Sat, 18 Jul 2026 14:42:36 GMT</pubDate>
+      <description><![CDATA[
+        Failure Build now fetches x.ai's model list <em>and</em> every custom provider's own catalog on every launch, merging them into one list you can switch between with <code>/model</code> — instead of only refreshing whichever single provider happened to be active.
+      ]]></description>
+    </item>
+
+    <item>
+      <title>New: Dracula and Catppuccin Mocha themes</title>
+      <link>https://github.com/failure-fail/failure-build/commit/2e10a01</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/2e10a01</guid>
+      <pubDate>Sat, 18 Jul 2026 10:02:52 GMT</pubDate>
+      <description><![CDATA[
+        Two more built-in color themes, selectable the same way as every other theme in the TUI.
+      ]]></description>
+    </item>
+
+    <item>
+      <title>New: Android/Termux support — a native android-aarch64 build</title>
+      <link>https://github.com/failure-fail/failure-build/commit/12fc374</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/12fc374</guid>
+      <pubDate>Fri, 17 Jul 2026 11:26:15 GMT</pubDate>
+      <description><![CDATA[
+        Android has no general-purpose terminal, so there's no standalone <code>.apk</code> — instead this ships a native <code>aarch64-linux-android</code> build that runs inside <a href="https://termux.dev/">Termux</a>, which provides one plus a real Linux userland.
+      ]]></description>
+    </item>
+
+    <item>
+      <title>New: an original logo, and the auto-updater points at our own releases</title>
+      <link>https://github.com/failure-fail/failure-build/commit/f83e856</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/f83e856</guid>
+      <pubDate>Fri, 17 Jul 2026 09:27:55 GMT</pubDate>
+      <description><![CDATA[
+        Replaced the inherited braille-pattern logo with an original design, and pointed <code>failure update</code> at this repo's own GitHub Releases instead of upstream's.
+        <br/><br/>
+        <img src="https://raw.githubusercontent.com/failure-fail/failure-build/main/docs/media/welcome-screen.png" alt="Failure Build welcome screen" width="600" />
+      ]]></description>
+    </item>
+
+  </channel>
+</rss>
