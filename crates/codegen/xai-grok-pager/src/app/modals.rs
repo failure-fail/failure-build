@@ -91,6 +91,49 @@ impl AgentView {
         true
     }
 
+    /// Refresh an already-open `/model` `ArgPicker`'s item list against the
+    /// latest `ModelState` — called after `x.ai/models/update` lands (e.g.
+    /// from `Action::RefreshModelCatalog`'s live re-fetch) so a provider
+    /// added earlier this session shows its real catalog without the user
+    /// having to close and reopen the picker.
+    ///
+    /// Only refreshes the unfiltered (just-opened) view: if the user has
+    /// already typed a filter query, leave it alone rather than clobbering
+    /// their in-progress input.
+    pub(super) fn resync_model_arg_picker_if_open(&mut self) {
+        let Some(ActiveModal::ArgPicker {
+            command,
+            args_query,
+            ..
+        }) = self.active_modal.as_ref()
+        else {
+            return;
+        };
+        if !args_query.is_empty() || !matches!(command.as_str(), "model" | "m") {
+            return;
+        }
+        let command = command.clone();
+        let Some(cmd) = self.prompt.slash_controller.registry().get(&command) else {
+            return;
+        };
+        let ctx = self.prompt.slash_controller.app_ctx(&self.session.models);
+        let Some(model_items) = cmd.suggest_args(&ctx, "") else {
+            return;
+        };
+        if model_items.is_empty() {
+            return;
+        }
+        if let Some(ActiveModal::ArgPicker {
+            items,
+            original_items,
+            ..
+        }) = self.active_modal.as_mut()
+        {
+            *items = model_items.clone();
+            *original_items = model_items;
+        }
+    }
+
     /// Handle a key press while a modal dialog is active.
     ///
     /// Matches the pressed character against the modal's options and resolves
@@ -793,8 +836,9 @@ impl AgentView {
                                     return InputOutcome::Action(Action::FetchSessionList);
                                 }
 
+                                let is_model_picker = matches!(trimmed.as_str(), "model" | "m");
                                 let is_picker =
-                                    matches!(trimmed.as_str(), "model" | "m" | "theme" | "t");
+                                    is_model_picker || matches!(trimmed.as_str(), "theme" | "t");
                                 if is_picker
                                     && let Some(command) =
                                         self.prompt.slash_controller.registry().get(&trimmed)
@@ -829,6 +873,16 @@ impl AgentView {
                                             window:
                                                 crate::views::modal_window::ModalWindowState::new(),
                                         });
+                                        // Model picker specifically: kick a live
+                                        // catalog re-fetch so a provider added
+                                        // earlier this session shows its real
+                                        // models instead of the config-key
+                                        // placeholder (see ActionId::ModelPicker).
+                                        if is_model_picker {
+                                            return InputOutcome::Action(
+                                                Action::RefreshModelCatalog,
+                                            );
+                                        }
                                         return InputOutcome::Changed;
                                     }
                                 }

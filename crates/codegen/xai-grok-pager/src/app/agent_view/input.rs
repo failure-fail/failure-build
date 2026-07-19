@@ -1065,7 +1065,12 @@ impl AgentView {
                             previous_palette: None,
                             window: crate::views::modal_window::ModalWindowState::new(),
                         });
-                        return InputOutcome::Changed;
+                        // Kick a live re-fetch (primary + all BYOP sources) so a
+                        // provider added earlier this session shows its real
+                        // catalog instead of the config-key placeholder — the
+                        // picker's already-open item list updates in place when
+                        // the `x.ai/models/update` notification lands.
+                        return InputOutcome::Action(Action::RefreshModelCatalog);
                     }
                 }
                 InputOutcome::Changed

@@ -1046,6 +1046,15 @@ impl ModelsManager {
         }
     }
 
+    /// Force a genuine network re-fetch (primary + every BYOP source) and push
+    /// the result to connected clients. Unlike `list_models`, always notifies
+    /// even though `fetch_and_apply` alone would leave clients unaware of the
+    /// change — used by the `/model` picker's on-open live refresh.
+    pub async fn refresh_live_and_notify(&self) {
+        self.fetch_and_apply().await;
+        self.notify_models_updated();
+    }
+
     async fn fetch_and_apply(&self) {
         self.fetch_and_apply_inner(crate::util::config::resolve_remote_fetch_enabled())
             .await

@@ -1877,6 +1877,38 @@ pub(crate) fn execute(
                 TaskResult::McpWorkerConfigured { result }
             });
         }
+        Effect::RefreshModelCatalog => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let request = acp::ExtRequest::new(
+                    "x.ai/internal/refresh_models_live",
+                    serde_json::value::to_raw_value(&serde_json::json!({}))
+                        .expect("serialize refresh_models_live params")
+                        .into(),
+                );
+                let result = match acp_send(request, &tx).await {
+                    Ok(resp) => {
+                        let wrapper: serde_json::Value =
+                            serde_json::from_str(resp.0.get()).unwrap_or_default();
+                        if let Some(err) = wrapper.get("error") {
+                            Err(err.as_str().unwrap_or("unknown error").to_string())
+                        } else {
+                            let count = wrapper
+                                .get("result")
+                                .and_then(|r| r.get("models"))
+                                .and_then(|m| m.as_u64())
+                                .unwrap_or(0) as usize;
+                            Ok(count)
+                        }
+                    }
+                    Err(e) => Err(sanitize_user_error(&format!("{e}"))),
+                };
+                if let Err(ref e) = result {
+                    tracing::warn!("live model catalog refresh failed: {e}");
+                }
+                TaskResult::ModelCatalogRefreshed { result }
+            });
+        }
         Effect::PersistPermissionMode { canonical, session_id, persist } => {
             let tx = acp_tx.clone();
             tasks

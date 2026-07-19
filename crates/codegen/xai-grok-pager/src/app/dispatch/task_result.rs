@@ -456,6 +456,17 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        TaskResult::ModelCatalogRefreshed { result } => {
+            // Silent on success: the refreshed catalog arrives separately via
+            // `x.ai/models/update` and updates the already-open picker in
+            // place. Only surface a failure, and only as a log line — the
+            // picker still shows the last-known list, so there's nothing the
+            // user needs to act on.
+            if let Err(err) = result {
+                tracing::warn!("live model catalog refresh failed: {err}");
+            }
+            vec![]
+        }
         TaskResult::CancelComplete => {
             tracing::trace!("Cancel notification sent successfully");
             vec![]

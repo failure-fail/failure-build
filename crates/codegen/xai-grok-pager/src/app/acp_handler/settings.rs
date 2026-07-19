@@ -43,6 +43,7 @@ pub(super) fn handle_models_update(notif: &acp::ExtNotification, app: &mut AppVi
                 .session
                 .models
                 .update_catalog(new_models.available.clone(), shell_fallback_current.clone());
+            agent.resync_model_arg_picker_if_open();
         }
         true
     } else {

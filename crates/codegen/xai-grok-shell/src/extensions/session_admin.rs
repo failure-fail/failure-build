@@ -12,6 +12,7 @@
 //! - `x.ai/internal/reload_project_mcp_servers` config hot-reload, cwd-scoped
 //! - `x.ai/internal/reload_skills`          skills file watcher fan-out
 //! - `x.ai/internal/reload_models`          model list hot-reload from config.toml
+//! - `x.ai/internal/refresh_models_live`    live re-fetch (primary + all BYOP), for the `/model` picker
 //! - `x.ai/internal/reload_models_cache`    model catalog hot-reload from disk cache
 //! - `x.ai/internal/auth_cleared`           auth hot-clear cleanup
 //! - `x.ai/plugins/reload`                  rebuild shared plugin registry
@@ -46,6 +47,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
         }
         "x.ai/internal/reload_skills" => handle_reload_skills(agent),
         "x.ai/internal/reload_models" => handle_reload_models(agent),
+        "x.ai/internal/refresh_models_live" => handle_refresh_models_live(agent).await,
         "x.ai/internal/reload_models_cache" => handle_reload_models_cache(agent),
         "x.ai/internal/auth_cleared" => handle_auth_cleared(agent),
         "x.ai/plugins/reload" => handle_plugins_reload(agent).await,
@@ -572,10 +574,15 @@ fn handle_reload_models(agent: &MvpAgent) -> ExtResult {
         let mut agent_config = agent.cfg.borrow_mut();
         agent_config.models = toml_config.models.clone();
         agent_config.config_models = toml_config.config_models.clone();
+        agent_config.config_providers = toml_config.config_providers.clone();
         agent_config.web_search_model = overrides.web_search;
         agent_config.session_summary_model = overrides.session_summary;
         agent_config.image_description_model = overrides.image_description;
         agent_config.prompt_suggest_model_pin = overrides.prompt_suggestion;
+        // A `/provider add` (or hand-edited config.toml) may have introduced a
+        // new BYOP source since the last sync — recompute the extra-sources
+        // list so a live refetch (`refresh_models_live`) knows to fetch it.
+        agent_config.sync_byop_models_sources();
     }
     // Recompute the campaign overlay + `pre_campaign_default` (the catalog-miss
     // fallback) so reload matches spawn; `new_from_toml_cfg` reset it to None.
@@ -589,6 +596,27 @@ fn handle_reload_models(agent: &MvpAgent) -> ExtResult {
 
     let count = agent.models_manager.models().len();
     tracing::info!(count, "model list reloaded from config.toml");
+    ExtMethodResult::success(serde_json::json!({ "models": count }))
+        .to_ext_response()
+        .map_err(|e| acp::Error::internal_error().data(e.to_string()))
+}
+
+// internal/refresh_models_live
+
+/// Force a live re-fetch of the model catalog (primary + every configured
+/// BYOP source), instead of waiting for the next app restart.
+///
+/// Called when the pager opens the `/model` picker. `reload_models` only
+/// re-reads `config.toml` and rebuilds from whatever was already fetched —
+/// a provider added via `/provider add` earlier in the same session shows
+/// up there as its bare config-key placeholder, not its real catalog, until
+/// a real network fetch runs. This re-syncs config (picking up newly added
+/// providers) and then does that fetch.
+async fn handle_refresh_models_live(agent: &MvpAgent) -> ExtResult {
+    handle_reload_models(agent)?;
+    agent.models_manager.refresh_live_and_notify().await;
+    let count = agent.models_manager.models().len();
+    tracing::info!(count, "model list refreshed live for /model picker");
     ExtMethodResult::success(serde_json::json!({ "models": count }))
         .to_ext_response()
         .map_err(|e| acp::Error::internal_error().data(e.to_string()))

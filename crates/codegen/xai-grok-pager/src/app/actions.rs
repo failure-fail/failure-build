@@ -558,6 +558,13 @@ pub enum Action {
         worker_name: Option<String>,
         account_id: Option<String>,
     },
+    /// Fired when the `/model` picker opens. Asks the shell to re-sync
+    /// config (picking up any `/provider add` from earlier this session)
+    /// and do a live network re-fetch of the primary + every BYOP model
+    /// catalog, instead of only showing what was fetched at app boot.
+    /// The refreshed catalog arrives asynchronously via the existing
+    /// `x.ai/models/update` notification — this action doesn't wait on it.
+    RefreshModelCatalog,
     /// Commit the max-thoughts-width (column budget for the thoughts panel).
     /// Payload is `i64`; clamped to `u16` at the shell helper boundary.
     SetMaxThoughtsWidth(i64),
@@ -1576,6 +1583,9 @@ pub enum Effect {
         worker_name: Option<String>,
         account_id: Option<String>,
     },
+    /// Ask the shell to re-sync config and live-refetch the model catalog
+    /// (`Action::RefreshModelCatalog` / `/model` picker open).
+    RefreshModelCatalog,
     /// Persist the permission mode to config.toml and notify the agent
     /// via ACP. See [`PermissionModePersist`] for rollback semantics.
     PersistPermissionMode {
@@ -2283,6 +2293,10 @@ pub enum TaskResult {
     /// `Effect::ConfigureMcpWorker` completed (`/mcp-worker configure`).
     /// `Ok(worker_url)` on success.
     McpWorkerConfigured { result: Result<String, String> },
+    /// `Effect::RefreshModelCatalog` completed. Silent on success (the
+    /// catalog itself lands separately via `x.ai/models/update`) — only
+    /// logged on failure, since the picker already shows the last-known list.
+    ModelCatalogRefreshed { result: Result<usize, String> },
     /// Manual `/compact` command completed.
     CompactComplete {
         agent_id: AgentId,
