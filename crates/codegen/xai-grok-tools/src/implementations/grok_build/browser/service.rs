@@ -45,14 +45,15 @@ async fn with_timeout<T>(
 fn launch_failed(e: impl std::fmt::Display) -> ToolError {
     ToolError::new(
         ToolErrorKind::Custom,
-        format!(
-            "Could not launch a browser — is Google Chrome or Chromium installed? ({e})"
-        ),
+        format!("Could not launch a browser — is Google Chrome or Chromium installed? ({e})"),
     )
 }
 
 fn cdp_failed(action: &str, e: impl std::fmt::Display) -> ToolError {
-    ToolError::new(ToolErrorKind::Custom, format!("Browser {action} failed: {e}"))
+    ToolError::new(
+        ToolErrorKind::Custom,
+        format!("Browser {action} failed: {e}"),
+    )
 }
 
 #[derive(Default)]
@@ -101,9 +102,7 @@ impl BrowserService {
                 .build()
                 .map_err(launch_failed)?;
             let (browser, mut handler) = Browser::launch(config).await.map_err(launch_failed)?;
-            let handler_task = tokio::spawn(async move {
-                while handler.next().await.is_some() {}
-            });
+            let handler_task = tokio::spawn(async move { while handler.next().await.is_some() {} });
             state.browser = Some(browser);
             state.handler_task = Some(handler_task);
         }
@@ -121,7 +120,9 @@ impl BrowserService {
     pub async fn navigate(&self, url: &str) -> Result<(String, Option<String>), ToolError> {
         with_timeout(NAVIGATE_TIMEOUT, "navigation", async {
             let page = self.ensure_page().await?;
-            page.goto(url).await.map_err(|e| cdp_failed("navigation", e))?;
+            page.goto(url)
+                .await
+                .map_err(|e| cdp_failed("navigation", e))?;
             page.wait_for_navigation()
                 .await
                 .map_err(|e| cdp_failed("navigation", e))?;
@@ -155,7 +156,12 @@ impl BrowserService {
 
     /// Type `text` into the first element matching `selector`, optionally
     /// pressing Enter afterward.
-    pub async fn type_text(&self, selector: &str, text: &str, submit: bool) -> Result<(), ToolError> {
+    pub async fn type_text(
+        &self,
+        selector: &str,
+        text: &str,
+        submit: bool,
+    ) -> Result<(), ToolError> {
         with_timeout(ACTION_TIMEOUT, "type", async {
             let page = self.ensure_page().await?;
             let element = page.find_element(selector).await.map_err(|e| {

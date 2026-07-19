@@ -69,6 +69,7 @@ impl ToolKind {
             ToolKind::Monitor => "Monitor",
             ToolKind::GoalUpdate => "Update Goal",
             ToolKind::Browser => "Browser",
+            ToolKind::Git => "Git",
             ToolKind::Other => "Tool",
         }
     }
@@ -111,6 +112,7 @@ impl ToolKind {
             | ToolKind::Monitor
             | ToolKind::GoalUpdate
             | ToolKind::Browser
+            | ToolKind::Git
             | ToolKind::Other => false,
         }
     }

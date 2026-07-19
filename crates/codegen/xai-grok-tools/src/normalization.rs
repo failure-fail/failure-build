@@ -134,6 +134,10 @@ pub fn canonical_input(input: &ToolInput) -> Option<serde_json::Value> {
         | ToolInput::BrowserGetText(_)
         | ToolInput::BrowserScreenshot(_)
         | ToolInput::BrowserClose(_)
+        | ToolInput::GitStatus(_)
+        | ToolInput::GitDiff(_)
+        | ToolInput::GitLog(_)
+        | ToolInput::GitCommit(_)
         | ToolInput::Dynamic(_) => return None,
     })
 }

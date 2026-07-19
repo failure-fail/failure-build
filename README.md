@@ -7,9 +7,9 @@
 **Failure Build** is a terminal-based AI coding agent, forked from xAI's
 open-sourced Grok Build. It runs as a full-screen TUI that understands your
 codebase, edits files, executes shell commands, searches the web, drives a
-real browser, and manages long-running tasks — interactively, headlessly
-for scripting/CI, or embedded in editors via the Agent Client Protocol
-(ACP). Unlike upstream Grok Build, Failure Build is bring-your-own-provider:
+real browser, runs structured git operations (status, diff, log, commit),
+and manages long-running tasks — interactively, headlessly for
+scripting/CI, or embedded in editors via the Agent Client Protocol (ACP). Unlike upstream Grok Build, Failure Build is bring-your-own-provider:
 x.ai's Grok models, OpenAI, Anthropic, Ollama, or any custom
 OpenAI-compatible endpoint — configurable via CLI flags, the `/provider`
 slash command, or `config.toml`, with the full model catalog from every

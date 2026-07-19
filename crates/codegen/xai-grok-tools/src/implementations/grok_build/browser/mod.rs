@@ -70,7 +70,10 @@ impl xai_tool_runtime::Tool for BrowserNavigateTool {
         &self,
         _ctx: &xai_tool_runtime::ListToolsContext,
     ) -> xai_tool_types::ToolDescription {
-        xai_tool_types::ToolDescription::new("browser_navigate", ToolMetadata::description_template(self))
+        xai_tool_types::ToolDescription::new(
+            "browser_navigate",
+            ToolMetadata::description_template(self),
+        )
     }
 
     fn capabilities(&self) -> xai_tool_protocol::ToolCapabilities {
@@ -139,7 +142,9 @@ async fn validate_navigable_url(raw: &str) -> Result<String, xai_tool_runtime::T
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct BrowserClickInput {
-    #[schemars(description = "CSS selector of the element to click, e.g. 'button#submit' or 'a.nav-link'.")]
+    #[schemars(
+        description = "CSS selector of the element to click, e.g. 'button#submit' or 'a.nav-link'."
+    )]
     pub selector: String,
 }
 
@@ -174,7 +179,10 @@ impl xai_tool_runtime::Tool for BrowserClickTool {
         &self,
         _ctx: &xai_tool_runtime::ListToolsContext,
     ) -> xai_tool_types::ToolDescription {
-        xai_tool_types::ToolDescription::new("browser_click", ToolMetadata::description_template(self))
+        xai_tool_types::ToolDescription::new(
+            "browser_click",
+            ToolMetadata::description_template(self),
+        )
     }
 
     fn capabilities(&self) -> xai_tool_protocol::ToolCapabilities {
@@ -219,7 +227,9 @@ pub struct BrowserTypeInput {
     #[schemars(description = "Text to type into the element.")]
     pub text: String,
     #[serde(default)]
-    #[schemars(description = "If true, press Enter after typing (e.g. to submit a search box). Defaults to false.")]
+    #[schemars(
+        description = "If true, press Enter after typing (e.g. to submit a search box). Defaults to false."
+    )]
     pub submit: bool,
 }
 
@@ -254,7 +264,10 @@ impl xai_tool_runtime::Tool for BrowserTypeTool {
         &self,
         _ctx: &xai_tool_runtime::ListToolsContext,
     ) -> xai_tool_types::ToolDescription {
-        xai_tool_types::ToolDescription::new("browser_type", ToolMetadata::description_template(self))
+        xai_tool_types::ToolDescription::new(
+            "browser_type",
+            ToolMetadata::description_template(self),
+        )
     }
 
     fn capabilities(&self) -> xai_tool_protocol::ToolCapabilities {
@@ -272,7 +285,9 @@ impl xai_tool_runtime::Tool for BrowserTypeTool {
         input: BrowserTypeInput,
     ) -> Result<ToolOutput, xai_tool_runtime::ToolError> {
         let service = service_for(&ctx).await?;
-        service.type_text(&input.selector, &input.text, input.submit).await?;
+        service
+            .type_text(&input.selector, &input.text, input.submit)
+            .await?;
         Ok(ToolOutput::Text(
             format!("Typed into element matching '{}'.", input.selector).into(),
         ))
@@ -325,7 +340,10 @@ impl xai_tool_runtime::Tool for BrowserGetTextTool {
         &self,
         _ctx: &xai_tool_runtime::ListToolsContext,
     ) -> xai_tool_types::ToolDescription {
-        xai_tool_types::ToolDescription::new("browser_get_text", ToolMetadata::description_template(self))
+        xai_tool_types::ToolDescription::new(
+            "browser_get_text",
+            ToolMetadata::description_template(self),
+        )
     }
 
     fn capabilities(&self) -> xai_tool_protocol::ToolCapabilities {
@@ -360,7 +378,9 @@ impl xai_tool_runtime::Tool for BrowserGetTextTool {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct BrowserScreenshotInput {
     #[serde(default)]
-    #[schemars(description = "Capture the full scrollable page instead of just the visible viewport. Defaults to false.")]
+    #[schemars(
+        description = "Capture the full scrollable page instead of just the visible viewport. Defaults to false."
+    )]
     pub full_page: bool,
 }
 
@@ -394,7 +414,10 @@ impl xai_tool_runtime::Tool for BrowserScreenshotTool {
         &self,
         _ctx: &xai_tool_runtime::ListToolsContext,
     ) -> xai_tool_types::ToolDescription {
-        xai_tool_types::ToolDescription::new("browser_screenshot", ToolMetadata::description_template(self))
+        xai_tool_types::ToolDescription::new(
+            "browser_screenshot",
+            ToolMetadata::description_template(self),
+        )
     }
 
     fn capabilities(&self) -> xai_tool_protocol::ToolCapabilities {
@@ -458,7 +481,10 @@ impl xai_tool_runtime::Tool for BrowserCloseTool {
         &self,
         _ctx: &xai_tool_runtime::ListToolsContext,
     ) -> xai_tool_types::ToolDescription {
-        xai_tool_types::ToolDescription::new("browser_close", ToolMetadata::description_template(self))
+        xai_tool_types::ToolDescription::new(
+            "browser_close",
+            ToolMetadata::description_template(self),
+        )
     }
 
     fn capabilities(&self) -> xai_tool_protocol::ToolCapabilities {
@@ -500,8 +526,14 @@ mod tests {
             xai_tool_runtime::Tool::id(&BrowserNavigateTool).as_str(),
             "browser_navigate"
         );
-        assert_eq!(xai_tool_runtime::Tool::id(&BrowserClickTool).as_str(), "browser_click");
-        assert_eq!(xai_tool_runtime::Tool::id(&BrowserTypeTool).as_str(), "browser_type");
+        assert_eq!(
+            xai_tool_runtime::Tool::id(&BrowserClickTool).as_str(),
+            "browser_click"
+        );
+        assert_eq!(
+            xai_tool_runtime::Tool::id(&BrowserTypeTool).as_str(),
+            "browser_type"
+        );
         assert_eq!(
             xai_tool_runtime::Tool::id(&BrowserGetTextTool).as_str(),
             "browser_get_text"
@@ -510,12 +542,19 @@ mod tests {
             xai_tool_runtime::Tool::id(&BrowserScreenshotTool).as_str(),
             "browser_screenshot"
         );
-        assert_eq!(xai_tool_runtime::Tool::id(&BrowserCloseTool).as_str(), "browser_close");
+        assert_eq!(
+            xai_tool_runtime::Tool::id(&BrowserCloseTool).as_str(),
+            "browser_close"
+        );
     }
 
     #[tokio::test]
     async fn rejects_non_http_schemes() {
-        for bad in ["file:///etc/passwd", "javascript:alert(1)", "chrome://settings"] {
+        for bad in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "chrome://settings",
+        ] {
             let err = validate_navigable_url(bad).await.unwrap_err();
             assert!(err.to_string().contains("scheme"), "got: {err}");
         }
@@ -554,7 +593,10 @@ mod tests {
         let resources = crate::types::resources::Resources::new();
         let result = xai_tool_runtime::Tool::run(
             &tool,
-            crate::types::tool_metadata::test_ctx_with_call_id(resources.into_shared(), "test-call"),
+            crate::types::tool_metadata::test_ctx_with_call_id(
+                resources.into_shared(),
+                "test-call",
+            ),
             BrowserCloseInput {},
         )
         .await;

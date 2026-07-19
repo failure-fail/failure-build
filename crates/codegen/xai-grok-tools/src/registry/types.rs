@@ -687,6 +687,10 @@ impl ToolRegistryBuilder {
         b.register::<grok_build::BrowserGetTextTool>();
         b.register::<grok_build::BrowserScreenshotTool>();
         b.register::<grok_build::BrowserCloseTool>();
+        b.register::<grok_build::GitStatusTool>();
+        b.register::<grok_build::GitDiffTool>();
+        b.register::<grok_build::GitLogTool>();
+        b.register::<grok_build::GitCommitTool>();
         b.register::<grok_build::ImageToVideoTool>();
         b.register::<grok_build::ReferenceToVideoTool>();
         b.register::<grok_build::EnterPlanModeTool>();

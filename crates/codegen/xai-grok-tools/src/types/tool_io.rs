@@ -12,16 +12,19 @@
 //!   `From` derive generates `From<TypedOutput>` for each inner type.
 use crate::implementations::BashToolInput;
 use crate::implementations::codex::apply_patch::tool::ApplyPatchInput;
-use crate::implementations::grok_build::browser::{
-    BrowserClickInput, BrowserCloseInput, BrowserGetTextInput, BrowserNavigateInput,
-    BrowserScreenshotInput, BrowserTypeInput,
-};
 use crate::implementations::codex::grep_files::tool::CodexGrepFilesInput;
 use crate::implementations::codex::list_dir::tool::CodexListDirInput;
 use crate::implementations::codex::read_file::tool::CodexReadFileInput;
 use crate::implementations::grok_build::ask_user_question::AskUserQuestionInput;
+use crate::implementations::grok_build::browser::{
+    BrowserClickInput, BrowserCloseInput, BrowserGetTextInput, BrowserNavigateInput,
+    BrowserScreenshotInput, BrowserTypeInput,
+};
 use crate::implementations::grok_build::enter_plan_mode::EnterPlanModeInput;
 use crate::implementations::grok_build::exit_plan_mode::ExitPlanModeInput;
+use crate::implementations::grok_build::git::{
+    GitCommitInput, GitDiffInput, GitLogInput, GitStatusInput,
+};
 use crate::implementations::grok_build::grep::GrepSearchInput;
 use crate::implementations::grok_build::image_edit::ImageEditInput;
 use crate::implementations::grok_build::image_gen::ImageGenInput;
@@ -105,6 +108,10 @@ pub enum ToolInput {
     BrowserGetText(BrowserGetTextInput),
     BrowserScreenshot(BrowserScreenshotInput),
     BrowserClose(BrowserCloseInput),
+    GitStatus(GitStatusInput),
+    GitDiff(GitDiffInput),
+    GitLog(GitLogInput),
+    GitCommit(GitCommitInput),
     /// Dynamic input for runtime-registered tools (MCP, etc.)
     Dynamic(serde_json::Value),
 }
