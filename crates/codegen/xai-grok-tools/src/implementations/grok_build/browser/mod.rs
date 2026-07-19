@@ -90,6 +90,15 @@ impl xai_tool_runtime::Tool for BrowserNavigateTool {
         let url = validate_navigable_url(&input.url).await?;
         let service = service_for(&ctx).await?;
         let (final_url, title) = service.navigate(&url).await?;
+        // The initial-host check above can't see where an HTTP redirect or
+        // meta-refresh actually lands, and chromiumoxide gives no hook to
+        // pin the resolved IP before it dials — so re-check where we
+        // actually ended up, and purge the tab if it's blocked before any
+        // later browser_get_text/browser_screenshot call can read it.
+        if let Err(e) = validate_navigable_url(&final_url).await {
+            let _ = service.reset_to_blank().await;
+            return Err(e);
+        }
         let title = title.unwrap_or_else(|| "(untitled)".to_owned());
         Ok(ToolOutput::Text(
             format!("Navigated to {final_url}\nPage title: {title}").into(),
@@ -184,6 +193,17 @@ impl xai_tool_runtime::Tool for BrowserClickTool {
     ) -> Result<ToolOutput, xai_tool_runtime::ToolError> {
         let service = service_for(&ctx).await?;
         service.click(&input.selector).await?;
+        // A click can trigger in-page navigation (a plain `<a href>`, a JS
+        // handler) to somewhere the original browser_navigate call never
+        // saw. Re-check the tab's resulting location for the same reason
+        // browser_navigate re-checks its post-redirect URL.
+        if let Some(current) = service.current_url().await
+            && current != "about:blank"
+            && let Err(e) = validate_navigable_url(&current).await
+        {
+            let _ = service.reset_to_blank().await;
+            return Err(e);
+        }
         Ok(ToolOutput::Text(
             format!("Clicked element matching '{}'.", input.selector).into(),
         ))

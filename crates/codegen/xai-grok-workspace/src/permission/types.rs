@@ -287,9 +287,12 @@ impl From<&xai_grok_tools::types::ToolInput> for AccessKind {
             ToolInput::BrowserType(t) => {
                 AccessKind::Browser(format!("type into '{}'", t.selector))
             }
-            ToolInput::BrowserGetText(_)
-            | ToolInput::BrowserScreenshot(_)
-            | ToolInput::BrowserClose(_) => AccessKind::Read(None),
+            ToolInput::BrowserGetText(g) => AccessKind::Browser(match &g.selector {
+                Some(sel) => format!("read text from '{sel}'"),
+                None => "read page text".to_string(),
+            }),
+            ToolInput::BrowserScreenshot(_) => AccessKind::Browser("take a screenshot".to_string()),
+            ToolInput::BrowserClose(_) => AccessKind::Browser("close the browser".to_string()),
             ToolInput::Dynamic(_) => AccessKind::Read(None),
             #[allow(unreachable_patterns)]
             _ => AccessKind::Read(None),
@@ -635,6 +638,41 @@ mod tests {
         assert!(
             matches!(access, AccessKind::Edit(ref p) if p == "/tmp/secret.txt"),
             "Write should produce AccessKind::Edit with the file path, got {access:?}"
+        );
+    }
+    #[test]
+    fn browser_read_tools_map_to_browser_access_not_read() {
+        // Regression: BrowserGetText/Screenshot/Close previously mapped to
+        // AccessKind::Read(None), which auto-allows in every permission
+        // mode (including the default Ask mode) -- silently skipping the
+        // user prompt that browser_navigate/click/type correctly get, even
+        // though these tools can exfiltrate whatever the tab last loaded.
+        use xai_grok_tools::implementations::grok_build::browser::{
+            BrowserCloseInput, BrowserGetTextInput, BrowserScreenshotInput,
+        };
+        use xai_grok_tools::types::ToolInput;
+
+        let get_text = ToolInput::BrowserGetText(BrowserGetTextInput {
+            selector: Some("main".into()),
+        });
+        assert!(
+            matches!(AccessKind::from(&get_text), AccessKind::Browser(_)),
+            "BrowserGetText should produce AccessKind::Browser, got {:?}",
+            AccessKind::from(&get_text)
+        );
+
+        let screenshot = ToolInput::BrowserScreenshot(BrowserScreenshotInput { full_page: false });
+        assert!(
+            matches!(AccessKind::from(&screenshot), AccessKind::Browser(_)),
+            "BrowserScreenshot should produce AccessKind::Browser, got {:?}",
+            AccessKind::from(&screenshot)
+        );
+
+        let close = ToolInput::BrowserClose(BrowserCloseInput {});
+        assert!(
+            matches!(AccessKind::from(&close), AccessKind::Browser(_)),
+            "BrowserClose should produce AccessKind::Browser, got {:?}",
+            AccessKind::from(&close)
         );
     }
     #[test]
