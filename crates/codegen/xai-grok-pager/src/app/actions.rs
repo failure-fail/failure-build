@@ -548,6 +548,16 @@ pub enum Action {
         api_key: String,
         base_url: Option<String>,
     },
+    /// `/mcp-worker configure <token> [worker-name] [account-id]`. Validates
+    /// the Cloudflare API token and persists `~/.failure/cloudflare-worker.json`
+    /// via `Effect::ConfigureMcpWorker` — the npm wrapper's Node scripts pick
+    /// this up on next launch to actually deploy/point the Worker. This does
+    /// not itself run the MCP bridge, tunnel, or Worker deploy.
+    ConfigureMcpWorker {
+        api_token: String,
+        worker_name: Option<String>,
+        account_id: Option<String>,
+    },
     /// Commit the max-thoughts-width (column budget for the thoughts panel).
     /// Payload is `i64`; clamped to `u16` at the shell helper boundary.
     SetMaxThoughtsWidth(i64),
@@ -1558,6 +1568,14 @@ pub enum Effect {
         api_key: String,
         base_url: Option<String>,
     },
+    /// Validate a Cloudflare API token and persist
+    /// `~/.failure/cloudflare-worker.json` (`Action::ConfigureMcpWorker` /
+    /// `/mcp-worker configure`).
+    ConfigureMcpWorker {
+        api_token: String,
+        worker_name: Option<String>,
+        account_id: Option<String>,
+    },
     /// Persist the permission mode to config.toml and notify the agent
     /// via ACP. See [`PermissionModePersist`] for rollback semantics.
     PersistPermissionMode {
@@ -2262,6 +2280,9 @@ pub enum TaskResult {
         name: String,
         result: Result<(), String>,
     },
+    /// `Effect::ConfigureMcpWorker` completed (`/mcp-worker configure`).
+    /// `Ok(worker_url)` on success.
+    McpWorkerConfigured { result: Result<String, String> },
     /// Manual `/compact` command completed.
     CompactComplete {
         agent_id: AgentId,

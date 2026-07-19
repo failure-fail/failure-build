@@ -940,6 +940,9 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::AddProvider { name, api_key, base_url } => {
             vec![Effect::AddProvider { name, api_key, base_url }]
         }
+        Action::ConfigureMcpWorker { api_token, worker_name, account_id } => {
+            vec![Effect::ConfigureMcpWorker { api_token, worker_name, account_id }]
+        }
         Action::SetForkSecondaryModel(v) => set_fork_secondary_model(app, v),
         Action::ClearForkSecondaryModel => clear_fork_secondary_model(app),
         Action::SetMaxThoughtsWidth(v) => set_max_thoughts_width(app, v),

@@ -442,6 +442,20 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        TaskResult::McpWorkerConfigured { result } => {
+            if let Some(agent) = get_active_agent_mut(app) {
+                let message = match result {
+                    Ok(worker_url) => format!(
+                        "Cloudflare Worker credentials saved. Target: {worker_url}\n\
+                         Launch via the npm package's `failure` command to actually \
+                         deploy the Worker and point it at a live tunnel."
+                    ),
+                    Err(err) => format!("Couldn't configure the Cloudflare Worker: {err}"),
+                };
+                agent.scrollback.push_block(RenderBlock::system(message));
+            }
+            vec![]
+        }
         TaskResult::CancelComplete => {
             tracing::trace!("Cancel notification sent successfully");
             vec![]

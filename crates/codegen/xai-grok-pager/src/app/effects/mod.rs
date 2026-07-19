@@ -1862,6 +1862,21 @@ pub(crate) fn execute(
                 TaskResult::ProviderAdded { name: task_name, result }
             });
         }
+        Effect::ConfigureMcpWorker { api_token, worker_name, account_id } => {
+            tasks.spawn(async move {
+                let result = xai_grok_shell::cloudflare_worker::configure(
+                    api_token,
+                    worker_name,
+                    account_id,
+                )
+                .await
+                .map(|outcome| outcome.worker_url());
+                if let Err(ref e) = result {
+                    tracing::warn!("failed to configure Cloudflare Worker: {e}");
+                }
+                TaskResult::McpWorkerConfigured { result }
+            });
+        }
         Effect::PersistPermissionMode { canonical, session_id, persist } => {
             let tx = acp_tx.clone();
             tasks

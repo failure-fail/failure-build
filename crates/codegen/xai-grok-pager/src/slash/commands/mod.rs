@@ -35,6 +35,7 @@ pub mod jump;
 pub mod login;
 pub mod logout;
 pub mod loop_cmd;
+pub mod mcp_worker;
 pub mod mcps;
 pub mod model;
 pub mod multiline;
@@ -94,6 +95,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(screen_mode_switch::ScreenModeSwitchCommand::fullscreen()),
         Arc::new(model::ModelCommand),
         Arc::new(provider::ProviderCommand),
+        Arc::new(mcp_worker::McpWorkerCommand),
         Arc::new(effort::EffortCommand),
         Arc::new(always_approve::AlwaysApproveCommand),
         Arc::new(auto::AutoCommand),
