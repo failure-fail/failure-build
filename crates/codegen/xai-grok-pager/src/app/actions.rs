@@ -538,6 +538,16 @@ pub enum Action {
     /// Active session's model is unchanged; next session resolves
     /// via the shell's default-resolution chain.
     ClearDefaultModel,
+    /// `/provider add <name> <api-key> [base-url]`. Persists a
+    /// `[provider.<name>]`/`[model.<name>]` config.toml entry and stores
+    /// the API key via `Effect::AddProvider`. The existing config-file
+    /// watcher picks up the change and refreshes the model catalog
+    /// automatically — no separate "switch to it" step needed.
+    AddProvider {
+        name: String,
+        api_key: String,
+        base_url: Option<String>,
+    },
     /// Commit the max-thoughts-width (column budget for the thoughts panel).
     /// Payload is `i64`; clamped to `u16` at the shell helper boundary.
     SetMaxThoughtsWidth(i64),
@@ -1541,6 +1551,13 @@ pub enum Effect {
         model_id: acp::ModelId,
         reasoning_effort: Option<ReasoningEffort>,
     },
+    /// Persist a `[provider.*]`/`[model.*]` config.toml entry and store the
+    /// API key securely (`Action::AddProvider` / `/provider add`).
+    AddProvider {
+        name: String,
+        api_key: String,
+        base_url: Option<String>,
+    },
     /// Persist the permission mode to config.toml and notify the agent
     /// via ACP. See [`PermissionModePersist`] for rollback semantics.
     PersistPermissionMode {
@@ -2238,6 +2255,11 @@ pub enum TaskResult {
         outcome: SubagentKillOutcome,
     },
     PreferredModelPersisted {
+        result: Result<(), String>,
+    },
+    /// `Effect::AddProvider` completed (`/provider add`).
+    ProviderAdded {
+        name: String,
         result: Result<(), String>,
     },
     /// Manual `/compact` command completed.

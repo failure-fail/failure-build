@@ -429,6 +429,19 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        TaskResult::ProviderAdded { name, result } => {
+            if let Some(agent) = get_active_agent_mut(app) {
+                let message = match result {
+                    Ok(()) => format!(
+                        "Added provider '{name}'. Reloading the model catalog now — \
+                         it'll show up in `/model` shortly."
+                    ),
+                    Err(err) => format!("Couldn't add provider '{name}': {err}"),
+                };
+                agent.scrollback.push_block(RenderBlock::system(message));
+            }
+            vec![]
+        }
         TaskResult::CancelComplete => {
             tracing::trace!("Cancel notification sent successfully");
             vec![]

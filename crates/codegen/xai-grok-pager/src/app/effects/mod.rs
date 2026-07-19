@@ -1846,6 +1846,22 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::AddProvider { name, api_key, base_url } => {
+            let task_name = name.clone();
+            tasks.spawn(async move {
+                let result = xai_grok_shell::util::config::add_byop_provider(
+                    &name,
+                    &api_key,
+                    base_url.as_deref(),
+                )
+                .await
+                .map_err(|e| e.to_string());
+                if let Err(ref e) = result {
+                    tracing::warn!(provider = %name, "failed to add BYOP provider: {e}");
+                }
+                TaskResult::ProviderAdded { name: task_name, result }
+            });
+        }
         Effect::PersistPermissionMode { canonical, session_id, persist } => {
             let tx = acp_tx.clone();
             tasks

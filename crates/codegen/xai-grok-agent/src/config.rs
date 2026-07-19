@@ -280,6 +280,12 @@ fn default_grok_build_toolset() -> ToolServerConfig {
             (&search_tool::SearchTool).into(),
             (&use_tool::UseTool).into(),
             (&grok_build::UpdateGoalTool).into(),
+            (&grok_build::BrowserNavigateTool).into(),
+            (&grok_build::BrowserClickTool).into(),
+            (&grok_build::BrowserTypeTool).into(),
+            (&grok_build::BrowserGetTextTool).into(),
+            (&grok_build::BrowserScreenshotTool).into(),
+            (&grok_build::BrowserCloseTool).into(),
         ],
         behavior_preset: None,
     }

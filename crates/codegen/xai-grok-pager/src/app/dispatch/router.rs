@@ -937,6 +937,9 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::SetAutoLightTheme(v) => set_auto_light_theme(app, v),
         Action::SetDefaultModel(v) => set_default_model(app, v),
         Action::ClearDefaultModel => clear_default_model(app),
+        Action::AddProvider { name, api_key, base_url } => {
+            vec![Effect::AddProvider { name, api_key, base_url }]
+        }
         Action::SetForkSecondaryModel(v) => set_fork_secondary_model(app, v),
         Action::ClearForkSecondaryModel => clear_fork_secondary_model(app),
         Action::SetMaxThoughtsWidth(v) => set_max_thoughts_width(app, v),

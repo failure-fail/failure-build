@@ -15,27 +15,7 @@ pub async fn save_config(config: &Config) -> Result<()> {
     let _guard = SAVE_LOCK.lock().await;
 
     let path = user_config_path();
-    let mut root: TomlValue = match tokio::fs::read_to_string(&path).await {
-        Ok(s) => {
-            // Refuse to overwrite an unparseable config — silent fallback
-            // to an empty table would permanently drop unmodeled sections.
-            match toml::from_str::<TomlValue>(&s) {
-                Ok(v) => v,
-                Err(parse_err) => {
-                    return Err(anyhow::anyhow!(
-                        "refusing to overwrite unparseable {}: {}; save a backup \
-                         and fix the syntax error before retrying",
-                        path.display(),
-                        parse_err,
-                    ));
-                }
-            }
-        }
-        Err(_) => TomlValue::Table(TomlMap::new()),
-    };
-    if !matches!(root, TomlValue::Table(_)) {
-        root = TomlValue::Table(TomlMap::new());
-    }
+    let mut root = read_root_or_empty(&path).await?;
     let table = root.as_table_mut().expect("root must be a table");
 
     merge_section(table, "cli", &config.cli);
@@ -51,14 +31,44 @@ pub async fn save_config(config: &Config) -> Result<()> {
         merge_section(table, "skills", &config.skills);
     }
 
-    let toml_str = toml::to_string_pretty(&root)?;
+    write_root_atomic(&root, &path).await
+}
+
+/// Read `config.toml` (or an empty table if missing) as a raw [`TomlValue`].
+/// Refuses to proceed on unparseable existing content — silently falling
+/// back to an empty table would permanently drop unmodeled sections.
+async fn read_root_or_empty(path: &std::path::Path) -> Result<TomlValue> {
+    let mut root: TomlValue = match tokio::fs::read_to_string(path).await {
+        Ok(s) => match toml::from_str::<TomlValue>(&s) {
+            Ok(v) => v,
+            Err(parse_err) => {
+                return Err(anyhow::anyhow!(
+                    "refusing to overwrite unparseable {}: {}; save a backup \
+                     and fix the syntax error before retrying",
+                    path.display(),
+                    parse_err,
+                ));
+            }
+        },
+        Err(_) => TomlValue::Table(TomlMap::new()),
+    };
+    if !matches!(root, TomlValue::Table(_)) {
+        root = TomlValue::Table(TomlMap::new());
+    }
+    Ok(root)
+}
+
+/// Atomic write via temp file + rename (preserving the destination's
+/// existing permissions on unix), shared by every writer of `config.toml`.
+async fn write_root_atomic(root: &TomlValue, path: &std::path::Path) -> Result<()> {
+    let toml_str = toml::to_string_pretty(root)?;
     if let Some(parent) = path.parent() {
         let _ = tokio::fs::create_dir_all(parent).await;
     }
 
     // Preserve existing file permissions across the tmp+rename swap.
     #[cfg(unix)]
-    let prior_mode: Option<u32> = match tokio::fs::metadata(&path).await {
+    let prior_mode: Option<u32> = match tokio::fs::metadata(path).await {
         Ok(m) => {
             use std::os::unix::fs::PermissionsExt;
             Some(m.permissions().mode())
@@ -88,7 +98,69 @@ pub async fn save_config(config: &Config) -> Result<()> {
     }
     let _ = prior_mode;
 
-    tokio::fs::rename(&tmp, &path).await?;
+    tokio::fs::rename(&tmp, path).await?;
+    Ok(())
+}
+
+/// Add/update a `[provider.<name>]` `base_url` entry and ensure a
+/// `[model.<name>]` entry selecting that provider exists (`/provider add`
+/// in the TUI), then store `api_key` securely via the same provider-scoped
+/// secret storage `failure login --provider` uses.
+///
+/// Deliberately independent of [`save_config`]'s typed-`Config` flow: that
+/// flow only round-trips fixed-shape sections (`cli`/`models`/`ui`/...) via
+/// `merge_section`, which doesn't model the dynamic `[model.*]`/
+/// `[provider.*]` tables (arbitrary user-chosen keys) at all. Adding them
+/// there would mean re-serializing every already-loaded model/provider
+/// entry on every unrelated settings save.
+///
+/// Existing `[model.<name>]`/`[provider.<name>]` tables are left untouched
+/// if `name` is already configured — this only adds, never overwrites, an
+/// existing provider/model of the same name.
+pub async fn add_byop_provider(
+    name: &str,
+    api_key: &str,
+    base_url: Option<&str>,
+) -> Result<()> {
+    {
+        let _guard = SAVE_LOCK.lock().await;
+        let path = user_config_path();
+        let mut root = read_root_or_empty(&path).await?;
+        let table = root.as_table_mut().expect("root must be a table");
+
+        if let Some(base_url) = base_url {
+            let providers = table
+                .entry("provider")
+                .or_insert_with(|| TomlValue::Table(TomlMap::new()));
+            if !matches!(providers, TomlValue::Table(_)) {
+                *providers = TomlValue::Table(TomlMap::new());
+            }
+            let providers_table = providers.as_table_mut().expect("just ensured table");
+            if !providers_table.contains_key(name) {
+                let mut entry = TomlMap::new();
+                entry.insert("base_url".to_owned(), TomlValue::String(base_url.to_owned()));
+                providers_table.insert(name.to_owned(), TomlValue::Table(entry));
+            }
+        }
+
+        let models = table
+            .entry("model")
+            .or_insert_with(|| TomlValue::Table(TomlMap::new()));
+        if !matches!(models, TomlValue::Table(_)) {
+            *models = TomlValue::Table(TomlMap::new());
+        }
+        let models_table = models.as_table_mut().expect("just ensured table");
+        if !models_table.contains_key(name) {
+            let mut entry = TomlMap::new();
+            entry.insert("provider".to_owned(), TomlValue::String(name.to_owned()));
+            models_table.insert(name.to_owned(), TomlValue::Table(entry));
+        }
+
+        write_root_atomic(&root, &path).await?;
+    }
+
+    let scope = crate::auth::provider_api_key_scope(name);
+    crate::auth::store_provider_api_key(&crate::util::grok_home::grok_home(), &scope, api_key)?;
     Ok(())
 }
 
