@@ -1035,6 +1035,8 @@ pub struct AppView {
     pub has_claude_import: bool,
     /// When set, the welcome screen renders an interactive import modal instead of normal content.
     pub import_claude_modal: Option<crate::views::import_claude_modal::ImportClaudeModalState>,
+    /// First-launch / `/provider setup` BYOP wizard.
+    pub byop_setup_modal: Option<crate::views::byop_setup_modal::ByopSetupModalState>,
     /// Doc viewer overlay for the welcome screen (release notes via Ctrl+L).
     pub welcome_doc_viewer: Option<crate::views::modal::ActiveModal>,
     /// Whether the pager uses fullscreen (alt-screen) or inline mode.
@@ -1321,6 +1323,7 @@ impl AppView {
             relaunch: None,
             has_claude_import: false,
             import_claude_modal: None,
+            byop_setup_modal: None,
             welcome_doc_viewer: None,
             screen_mode: ScreenMode::Inline,
             show_resolved_model: true,
@@ -2164,6 +2167,7 @@ impl AppView {
                     sp_entries_query: &self.session_picker_entries_query,
                     has_claude_import: self.has_claude_import,
                     import_claude_modal: &mut self.import_claude_modal,
+                    byop_setup_modal: &mut self.byop_setup_modal,
                     welcome_doc_viewer: &mut self.welcome_doc_viewer,
                     changelog_markdown: &self.changelog_markdown,
                     show_changelog_action: self.welcome_show_changelog_action,
@@ -2723,6 +2727,7 @@ struct WelcomeInputCtx<'a> {
     sp_entries_query: &'a Option<String>,
     has_claude_import: bool,
     import_claude_modal: &'a mut Option<crate::views::import_claude_modal::ImportClaudeModalState>,
+    byop_setup_modal: &'a mut Option<crate::views::byop_setup_modal::ByopSetupModalState>,
     welcome_doc_viewer: &'a mut Option<crate::views::modal::ActiveModal>,
     changelog_markdown: &'a Option<String>,
     /// Whether the welcome menu currently includes a "Changelog" row (above
@@ -2740,6 +2745,46 @@ struct WelcomeInputCtx<'a> {
 }
 /// Welcome view input -- auth-state-aware routing.
 fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutcome {
+    if let Some(modal) = ctx.byop_setup_modal.as_mut() {
+        use crate::views::byop_setup_modal::ByopSetupOutcome;
+        let outcome_to_input = |o: ByopSetupOutcome| match o {
+            ByopSetupOutcome::Cancelled => InputOutcome::Action(Action::CancelByopSetup),
+            ByopSetupOutcome::Submit {
+                name,
+                api_key,
+                base_url,
+            } => InputOutcome::Action(Action::AddProvider {
+                name,
+                api_key,
+                base_url,
+                complete_auth: true,
+            }),
+            ByopSetupOutcome::Changed => InputOutcome::Changed,
+            ByopSetupOutcome::Unchanged => InputOutcome::Unchanged,
+        };
+        if let Event::Key(key) = ev {
+            if key.kind == crossterm::event::KeyEventKind::Release {
+                return InputOutcome::Unchanged;
+            }
+            return outcome_to_input(crate::views::byop_setup_modal::handle_byop_setup_key(
+                modal, key,
+            ));
+        }
+        if let Event::Paste(text) = ev {
+            return outcome_to_input(crate::views::byop_setup_modal::handle_byop_setup_paste(
+                modal, text,
+            ));
+        }
+        if let Event::Mouse(mouse) = ev {
+            return outcome_to_input(crate::views::byop_setup_modal::handle_byop_setup_mouse(
+                modal,
+                mouse.kind,
+                mouse.column,
+                mouse.row,
+            ));
+        }
+        return InputOutcome::Unchanged;
+    }
     if let Some(modal) = ctx.import_claude_modal.as_mut() {
         use crate::views::import_claude_modal::ImportClaudeModalOutcome;
         let outcome_to_input = |o: ImportClaudeModalOutcome| match o {
@@ -3187,6 +3232,9 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
                     }
                     return InputOutcome::Action(Action::QuitConfirmed);
                 }
+                if key!('p').matches(key) {
+                    return InputOutcome::Action(Action::StartByopSetup);
+                }
                 if key!('l').matches(key) || key!(Enter).matches(key) {
                     return InputOutcome::Action(Action::Login);
                 }
@@ -3458,11 +3506,12 @@ fn handle_menu_nav(
     }
 }
 /// Dispatch an action for a welcome menu item when not yet authenticated.
-/// Menu layout: 0 = Login, 1 = Quit.
+/// Menu layout: 0 = Login, 1 = Set up a provider, 2 = Quit.
 fn dispatch_pending_menu_action(index: usize) -> InputOutcome {
     match index {
         0 => InputOutcome::Action(Action::Login),
-        1 => InputOutcome::Action(Action::Quit),
+        1 => InputOutcome::Action(Action::StartByopSetup),
+        2 => InputOutcome::Action(Action::Quit),
         _ => InputOutcome::Unchanged,
     }
 }
@@ -3931,6 +3980,16 @@ impl AppView {
                                 compact,
                             );
                         }
+                        if let Some(modal) = self.byop_setup_modal.as_mut() {
+                            let theme = crate::theme::Theme::current();
+                            crate::views::byop_setup_modal::render_byop_setup_modal(
+                                f.buffer_mut(),
+                                view_area,
+                                modal,
+                                &theme,
+                                compact,
+                            );
+                        }
                         if let Some(dialog) = self.new_worktree_dialog.as_ref() {
                             crate::views::new_worktree_dialog::render_new_worktree_dialog(
                                 view_area,
@@ -4368,6 +4427,7 @@ impl AppView {
             self.active_view, ActiveView::Agent(id) if self.agents.get(& id)
             .is_some_and(| a | a.extensions_modal.is_some() || a.active_modal.is_some())
         ) || self.import_claude_modal.is_some()
+            || self.byop_setup_modal.is_some()
             || self.new_worktree_dialog.is_some()
             || self.welcome_doc_viewer.is_some()
             || matches!(
@@ -5202,6 +5262,7 @@ pub(crate) mod tests {
             relaunch: None,
             has_claude_import: false,
             import_claude_modal: None,
+            byop_setup_modal: None,
             welcome_doc_viewer: None,
             screen_mode: ScreenMode::Inline,
             pending_effects: Vec::new(),
@@ -8081,6 +8142,17 @@ pub(crate) mod tests {
         app.welcome_prompt_focused = false;
         let outcome = app.handle_input(&key_event(KeyCode::Char('l'), KeyModifiers::NONE));
         assert!(matches!(outcome, InputOutcome::Action(Action::Login)));
+    }
+    #[test]
+    fn welcome_pending_p_opens_provider_setup() {
+        let mut app = test_app();
+        app.auth_state = AuthState::Pending { error: None };
+        app.welcome_prompt_focused = false;
+        let outcome = app.handle_input(&key_event(KeyCode::Char('p'), KeyModifiers::NONE));
+        assert!(matches!(
+            outcome,
+            InputOutcome::Action(Action::StartByopSetup)
+        ));
     }
     #[test]
     fn welcome_pending_enter_triggers_login() {

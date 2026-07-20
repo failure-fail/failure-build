@@ -6,7 +6,7 @@ use super::auth::{
 use super::billing::dispatch_open_supergrok_url;
 use super::ctx::{
     active_agent_session_id, get_active_agent_mut, navigate_clearing_selection, open_url_or_show,
-    sync_sleep_inhibitor, with_active_agent, with_scrollback,
+    show_welcome, sync_sleep_inhibitor, with_active_agent, with_scrollback,
 };
 use super::dashboard::{
     dispatch_dashboard_attach, dispatch_dashboard_begin_rename, dispatch_dashboard_change_location,
@@ -937,8 +937,30 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::SetAutoLightTheme(v) => set_auto_light_theme(app, v),
         Action::SetDefaultModel(v) => set_default_model(app, v),
         Action::ClearDefaultModel => clear_default_model(app),
-        Action::AddProvider { name, api_key, base_url } => {
-            vec![Effect::AddProvider { name, api_key, base_url }]
+        Action::AddProvider {
+            name,
+            api_key,
+            base_url,
+            complete_auth,
+        } => {
+            vec![Effect::AddProvider {
+                name,
+                api_key,
+                base_url,
+                complete_auth,
+            }]
+        }
+        Action::StartByopSetup => {
+            if !matches!(app.active_view, ActiveView::Welcome) {
+                show_welcome(app);
+            }
+            app.byop_setup_modal =
+                Some(crate::views::byop_setup_modal::ByopSetupModalState::new());
+            vec![]
+        }
+        Action::CancelByopSetup => {
+            app.byop_setup_modal = None;
+            vec![]
         }
         Action::ConfigureMcpWorker { api_token, worker_name, account_id } => {
             vec![Effect::ConfigureMcpWorker { api_token, worker_name, account_id }]

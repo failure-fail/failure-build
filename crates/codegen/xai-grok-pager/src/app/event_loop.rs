@@ -676,32 +676,31 @@ pub(crate) async fn run(
             }
         }
 
-        // Skip the login splash screen — auto-trigger login immediately
-        // by reusing dispatch_login. Effects are stashed and drained after
-        // the initial render so the user sees the auth UI right away.
+        // Skip the login splash only when methods exist AND the user has
+        // already chosen to log in somehow — for first launch, stay on the
+        // Pending menu so they can pick Login vs Set up a provider.
         // Empty auth_methods (preferred_method pin with no credentials) is
         // fail-closed: do not invent grok.com / auto-start OIDC.
         tracing::info!(
             method_id = ?app.login_method_id,
             methods_empty = connection.auth_methods.is_empty(),
-            "auto-triggering login at startup"
+            "showing login/provider choice at startup"
         );
     }
     // else: auth_state defaults to Done (already authenticated eagerly)
     // Effects stashed until after the initial render, so the user sees the
     // welcome/auth UI right away.
     let mut post_render_effects = if needs_interactive_login {
-        if connection.auth_methods.is_empty() {
-            // preferred_method pin unavailable — no advertised method to start.
-            app.auth_state = super::app_view::AuthState::Pending {
-                error: Some(
+        app.auth_state = super::app_view::AuthState::Pending {
+            error: if connection.auth_methods.is_empty() {
+                Some(
                     xai_grok_shell::agent::auth_method::PREFERRED_API_KEY_UNAVAILABLE.to_string(),
-                ),
-            };
-            vec![]
-        } else {
-            dispatch::dispatch(Action::Login, &mut app)
-        }
+                )
+            } else {
+                None
+            },
+        };
+        vec![]
     } else {
         vec![]
     };

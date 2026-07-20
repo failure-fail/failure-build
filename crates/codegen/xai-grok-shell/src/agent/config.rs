@@ -1294,7 +1294,7 @@ pub struct Config {
     #[serde(skip)]
     pub config_models: IndexMap<String, ConfigModelOverride>,
     /// `[provider.*]` named connection profiles from config.toml, layered
-    /// over the built-in xai/openai/anthropic/ollama presets. See
+    /// over the built-in provider presets (see [`builtin_provider_presets`]). See
     /// [`ProviderConfig`] and [`ConfigModelOverride::provider`].
     #[serde(skip)]
     pub config_providers: IndexMap<String, ProviderConfig>,
@@ -3695,52 +3695,129 @@ pub struct ProviderConfig {
     pub extra_headers: IndexMap<String, String>,
     pub context_window: Option<u64>,
 }
-/// Built-in `[provider.*]` presets: xai (base URL resolved dynamically via
-/// [`EndpointsConfig`], not duplicated here), openai, anthropic, ollama.
-/// User `[provider.*]` tables in config.toml override these by name.
+/// A built-in BYOP provider preset (id + display metadata).
+///
+/// Used by [`default_provider_entries`] and by the TUI `/provider` command /
+/// first-launch setup wizard so the blessed list stays in one place.
+#[derive(Debug, Clone, Copy)]
+pub struct BuiltinProviderPreset {
+    /// Config key (`[provider.<id>]` / `/provider add <id> …`).
+    pub id: &'static str,
+    /// Human-readable name shown in pickers.
+    pub display_name: &'static str,
+    /// Default OpenAI-compatible base URL. `None` for `xai` (resolved via
+    /// [`EndpointsConfig`] at runtime).
+    pub base_url: Option<&'static str>,
+    /// Whether the setup wizard should require a non-empty API key.
+    /// Local Ollama commonly accepts any placeholder (or none).
+    pub requires_api_key: bool,
+}
+
+/// Built-in provider presets available without hand-writing `[provider.*]`.
+///
+/// Order is the order shown in the first-launch setup picker.
+pub fn builtin_provider_presets() -> &'static [BuiltinProviderPreset] {
+    &[
+        BuiltinProviderPreset {
+            id: "xai",
+            display_name: "xAI (Grok)",
+            base_url: None,
+            requires_api_key: true,
+        },
+        BuiltinProviderPreset {
+            id: "openai",
+            display_name: "OpenAI",
+            base_url: Some("https://api.openai.com/v1"),
+            requires_api_key: true,
+        },
+        BuiltinProviderPreset {
+            id: "anthropic",
+            display_name: "Anthropic",
+            base_url: Some("https://api.anthropic.com/v1"),
+            requires_api_key: true,
+        },
+        BuiltinProviderPreset {
+            id: "openrouter",
+            display_name: "OpenRouter",
+            base_url: Some("https://openrouter.ai/api/v1"),
+            requires_api_key: true,
+        },
+        BuiltinProviderPreset {
+            id: "groq",
+            display_name: "Groq",
+            base_url: Some("https://api.groq.com/openai/v1"),
+            requires_api_key: true,
+        },
+        BuiltinProviderPreset {
+            id: "together",
+            display_name: "Together AI",
+            base_url: Some("https://api.together.xyz/v1"),
+            requires_api_key: true,
+        },
+        BuiltinProviderPreset {
+            id: "deepseek",
+            display_name: "DeepSeek",
+            base_url: Some("https://api.deepseek.com/v1"),
+            requires_api_key: true,
+        },
+        BuiltinProviderPreset {
+            id: "gemini",
+            display_name: "Google Gemini",
+            base_url: Some("https://generativelanguage.googleapis.com/v1beta/openai"),
+            requires_api_key: true,
+        },
+        BuiltinProviderPreset {
+            id: "ollama",
+            display_name: "Ollama (local)",
+            base_url: Some("http://localhost:11434/v1"),
+            requires_api_key: false,
+        },
+    ]
+}
+
+/// True when `name` (case-insensitive) matches a built-in preset id.
+pub fn is_builtin_provider_preset(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    builtin_provider_presets().iter().any(|p| p.id == lower)
+}
+
+/// Look up a built-in preset by id (case-insensitive).
+pub fn builtin_provider_preset(name: &str) -> Option<&'static BuiltinProviderPreset> {
+    let lower = name.to_ascii_lowercase();
+    builtin_provider_presets().iter().find(|p| p.id == lower)
+}
+
+/// Built-in `[provider.*]` presets. User `[provider.*]` tables in
+/// `config.toml` override these by name.
 pub fn default_provider_entries() -> IndexMap<String, ProviderConfig> {
     let mut providers = IndexMap::new();
-    providers.insert(
-        "xai".to_string(),
-        ProviderConfig {
-            name: Some("xAI".to_string()),
+    for preset in builtin_provider_presets() {
+        let mut entry = ProviderConfig {
+            name: Some(preset.display_name.to_string()),
+            base_url: preset.base_url.map(str::to_string),
             ..Default::default()
-        },
-    );
-    providers.insert(
-        "openai".to_string(),
-        ProviderConfig {
-            name: Some("OpenAI".to_string()),
-            base_url: Some("https://api.openai.com/v1".to_string()),
-            api_backend: Some(ApiBackend::ChatCompletions),
-            auth_scheme: Some(AuthScheme::Bearer),
-            ..Default::default()
-        },
-    );
-    providers.insert(
-        "anthropic".to_string(),
-        ProviderConfig {
-            name: Some("Anthropic".to_string()),
-            base_url: Some("https://api.anthropic.com/v1".to_string()),
-            api_backend: Some(ApiBackend::Messages),
-            auth_scheme: Some(AuthScheme::XApiKey),
-            extra_headers: {
-                let mut headers = IndexMap::new();
-                headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
-                headers
-            },
-            ..Default::default()
-        },
-    );
-    providers.insert(
-        "ollama".to_string(),
-        ProviderConfig {
-            name: Some("Ollama".to_string()),
-            base_url: Some("http://localhost:11434/v1".to_string()),
-            api_backend: Some(ApiBackend::ChatCompletions),
-            ..Default::default()
-        },
-    );
+        };
+        match preset.id {
+            "anthropic" => {
+                entry.api_backend = Some(ApiBackend::Messages);
+                entry.auth_scheme = Some(AuthScheme::XApiKey);
+                entry.extra_headers = {
+                    let mut headers = IndexMap::new();
+                    headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
+                    headers
+                };
+            }
+            "xai" => {
+                // Base URL comes from EndpointsConfig; leave backend/auth default.
+            }
+            _ => {
+                // OpenAI-compatible Chat Completions + bearer auth.
+                entry.api_backend = Some(ApiBackend::ChatCompletions);
+                entry.auth_scheme = Some(AuthScheme::Bearer);
+            }
+        }
+        providers.insert(preset.id.to_string(), entry);
+    }
     providers
 }
 /// A `[model.foo]` entry from config.toml, parsed directly from raw TOML
@@ -6353,6 +6430,67 @@ reasoning_effort = "low"
         assert_eq!(model.info.api_backend, ApiBackend::ChatCompletions);
         assert_eq!(model.info.auth_scheme, AuthScheme::Bearer);
         assert_eq!(model.info.provider.as_deref(), Some("openai"));
+    }
+    #[test]
+    fn builtin_provider_presets_cover_popular_byop_hosts() {
+        let providers = default_provider_entries();
+        for id in [
+            "xai",
+            "openai",
+            "anthropic",
+            "openrouter",
+            "groq",
+            "together",
+            "deepseek",
+            "gemini",
+            "ollama",
+        ] {
+            assert!(
+                providers.contains_key(id),
+                "missing built-in provider preset `{id}`"
+            );
+            assert!(is_builtin_provider_preset(id));
+        }
+        assert_eq!(
+            providers["openrouter"].base_url.as_deref(),
+            Some("https://openrouter.ai/api/v1")
+        );
+        assert_eq!(
+            providers["groq"].base_url.as_deref(),
+            Some("https://api.groq.com/openai/v1")
+        );
+        assert_eq!(
+            providers["gemini"].base_url.as_deref(),
+            Some("https://generativelanguage.googleapis.com/v1beta/openai")
+        );
+        assert_eq!(
+            providers["anthropic"].auth_scheme,
+            Some(AuthScheme::XApiKey)
+        );
+        assert!(
+            !is_builtin_provider_preset("my-custom-thing"),
+            "unknown names must not count as presets"
+        );
+    }
+    #[test]
+    fn byop_model_inherits_fields_from_named_openrouter_provider() {
+        let raw_config: toml::Value = toml::from_str(
+            r#"
+            [model."my-or"]
+            model = "openai/gpt-4o"
+            provider = "openrouter"
+            "#,
+        )
+        .unwrap();
+        let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+        let model = resolve_model_list(&cfg, None)
+            .get("my-or")
+            .expect("model should exist")
+            .clone();
+        assert_eq!(model.info.base_url, "https://openrouter.ai/api/v1");
+        assert_eq!(model.info.api_backend, ApiBackend::ChatCompletions);
+        assert_eq!(model.info.auth_scheme, AuthScheme::Bearer);
+        assert_eq!(model.info.provider.as_deref(), Some("openrouter"));
     }
     #[test]
     fn byop_model_inherits_fields_from_named_anthropic_provider() {

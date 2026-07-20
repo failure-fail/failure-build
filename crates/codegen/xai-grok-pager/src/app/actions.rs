@@ -547,7 +547,14 @@ pub enum Action {
         name: String,
         api_key: String,
         base_url: Option<String>,
+        /// When true (first-launch / `/provider setup` wizard), also refresh
+        /// the model catalog and authenticate via `xai.api_key` after save.
+        complete_auth: bool,
     },
+    /// Open the BYOP provider setup wizard (welcome Pending menu / `/provider setup`).
+    StartByopSetup,
+    /// Dismiss the BYOP provider setup wizard without saving.
+    CancelByopSetup,
     /// `/mcp-worker configure <token> [worker-name] [account-id]`. Validates
     /// the Cloudflare API token and persists `~/.failure/cloudflare-worker.json`
     /// via `Effect::ConfigureMcpWorker` — the npm wrapper's Node scripts pick
@@ -1582,6 +1589,7 @@ pub enum Effect {
         name: String,
         api_key: String,
         base_url: Option<String>,
+        complete_auth: bool,
     },
     /// Validate a Cloudflare API token and persist
     /// `~/.failure/cloudflare-worker.json` (`Action::ConfigureMcpWorker` /
@@ -2298,10 +2306,15 @@ pub enum TaskResult {
     PreferredModelPersisted {
         result: Result<(), String>,
     },
-    /// `Effect::AddProvider` completed (`/provider add`).
+    /// `Effect::AddProvider` completed (`/provider add` or setup wizard).
+    /// When `complete_auth` was requested, `auth_complete` is set from the
+    /// follow-on authenticate call (Ok = ready to use; Err = saved but auth
+    /// failed — user can still `/login`).
     ProviderAdded {
         name: String,
         result: Result<(), String>,
+        complete_auth: bool,
+        auth_complete: Option<Result<(), String>>,
     },
     /// `Effect::ConfigureMcpWorker` completed (`/mcp-worker configure`).
     /// `Ok(worker_url)` on success.

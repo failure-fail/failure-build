@@ -1846,8 +1846,14 @@ pub(crate) fn execute(
                     }
                 });
         }
-        Effect::AddProvider { name, api_key, base_url } => {
+        Effect::AddProvider {
+            name,
+            api_key,
+            base_url,
+            complete_auth,
+        } => {
             let task_name = name.clone();
+            let tx = acp_tx.clone();
             tasks.spawn(async move {
                 let result = xai_grok_shell::util::config::add_byop_provider(
                     &name,
@@ -1858,8 +1864,49 @@ pub(crate) fn execute(
                 .map_err(|e| e.to_string());
                 if let Err(ref e) = result {
                     tracing::warn!(provider = %name, "failed to add BYOP provider: {e}");
+                    return TaskResult::ProviderAdded {
+                        name: task_name,
+                        result,
+                        complete_auth,
+                        auth_complete: None,
+                    };
                 }
-                TaskResult::ProviderAdded { name: task_name, result }
+
+                let auth_complete = if complete_auth {
+                    // Reload models so has_own_credentials sees the new key,
+                    // then authenticate with xai.api_key.
+                    let refresh = acp::ExtRequest::new(
+                        "x.ai/internal/refresh_models_live",
+                        serde_json::value::to_raw_value(&serde_json::json!({}))
+                            .expect("serialize refresh_models_live params")
+                            .into(),
+                    );
+                    if let Err(e) = acp_send(refresh, &tx).await {
+                        tracing::warn!("BYOP setup: model refresh failed: {e}");
+                    }
+                    let method_id = acp::AuthMethodId::new(
+                        xai_grok_shell::agent::auth_method::XAI_API_KEY_METHOD_ID,
+                    );
+                    match send_authenticate(&tx, 0, method_id, false, false).await {
+                        TaskResult::AuthComplete { .. } => Some(Ok(())),
+                        TaskResult::AuthFailed { error, .. } => Some(Err(error)),
+                        other => {
+                            tracing::warn!(
+                                "BYOP setup: unexpected authenticate result: {other:?}"
+                            );
+                            Some(Err("authentication returned an unexpected result".into()))
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                TaskResult::ProviderAdded {
+                    name: task_name,
+                    result,
+                    complete_auth,
+                    auth_complete,
+                }
             });
         }
         Effect::ConfigureMcpWorker { api_token, worker_name, account_id } => {
