@@ -1845,14 +1845,62 @@ impl Config {
         let mut seen_base_urls = std::collections::HashSet::new();
         for (key, over) in &self.config_models {
             let entry = over.apply(key, None, &self.endpoints, &self.config_providers);
+            // A `[model.*]` entry is a BYOP fetch candidate only when it names a
+            // custom (non-xAI) provider; a plain xAI-model tweak resolves to a
+            // first-party URL with no own key and is correctly skipped below
+            // without comment. For the BYOP ones, surface *why* a source wasn't
+            // built — a mis-added provider otherwise collapses silently to a
+            // bare `[model.<name>]` placeholder in the picker (named after the
+            // provider, e.g. "openrouter") with no clue as to the cause.
+            let byop_provider = entry
+                .info
+                .provider
+                .as_deref()
+                .filter(|p| *p != "xai" && !p.is_empty());
             let creds = resolve_credentials(&entry, None);
             let Some(api_key) = creds.api_key else {
+                if let Some(provider) = byop_provider {
+                    tracing::warn!(
+                        provider,
+                        model = %key,
+                        "BYOP provider has no resolvable API key; its catalog won't be fetched. \
+                         Re-run `/provider add {provider} <api-key> <base-url>`, or set its env key."
+                    );
+                    xai_grok_telemetry::unified_log::warn(
+                        "byop: provider skipped — no API key",
+                        None,
+                        Some(serde_json::json!({ "provider": provider, "model": key })),
+                    );
+                }
                 continue;
             };
             if crate::util::is_first_party_xai_url(&creds.base_url) {
+                if let Some(provider) = byop_provider {
+                    tracing::warn!(
+                        provider,
+                        model = %key,
+                        base_url = %creds.base_url,
+                        "BYOP provider resolves to a first-party xAI base URL, so no custom \
+                         catalog is fetched — is `base_url` set under [provider.{provider}]?"
+                    );
+                    xai_grok_telemetry::unified_log::warn(
+                        "byop: provider skipped — first-party base_url (missing [provider.*].base_url?)",
+                        None,
+                        Some(serde_json::json!({
+                            "provider": provider,
+                            "model": key,
+                            "base_url": creds.base_url,
+                        })),
+                    );
+                }
                 continue;
             }
             if seen_base_urls.insert(creds.base_url.clone()) {
+                tracing::info!(
+                    provider = byop_provider.unwrap_or("(unnamed)"),
+                    base_url = %creds.base_url,
+                    "BYOP models source registered for live catalog fetch"
+                );
                 sources.push(ByopModelsSource {
                     base_url: creds.base_url,
                     api_key,
@@ -5162,6 +5210,56 @@ mod tests {
             assert_eq!(definition.inject_default_tools, expected_injection);
         }
     }
+    /// A `[model.<name>]` naming a custom provider with a real non-xAI
+    /// `base_url` (+ inline key) registers exactly one BYOP fetch source — the
+    /// path that fills the `/model` picker with e.g. OpenRouter's live catalog.
+    #[test]
+    fn byop_provider_with_base_url_registers_fetch_source() {
+        let raw: toml::Value = toml::from_str(
+            r#"
+            [provider.openrouter]
+            base_url = "https://openrouter.ai/api/v1"
+            api_key = "sk-test"
+
+            [model.openrouter]
+            provider = "openrouter"
+            "#,
+        )
+        .unwrap();
+        let mut cfg = Config::new_from_toml_cfg(&raw).unwrap();
+        cfg.sync_byop_models_sources();
+        assert_eq!(cfg.endpoints.models_extra_sources.len(), 1);
+        assert_eq!(
+            cfg.endpoints.models_extra_sources[0].base_url,
+            "https://openrouter.ai/api/v1"
+        );
+    }
+
+    /// Regression for the "picker only shows `openrouter`" report: a custom
+    /// provider whose `[provider.*]` block omits `base_url` falls back to the
+    /// first-party xAI URL and so builds NO fetch source, leaving only the bare
+    /// `[model.<name>]` placeholder. The entry is skipped (and now logged/
+    /// telemetry-surfaced), never turned into a dead source.
+    #[test]
+    fn byop_provider_missing_base_url_registers_no_source() {
+        let raw: toml::Value = toml::from_str(
+            r#"
+            [provider.openrouter]
+            api_key = "sk-test"
+
+            [model.openrouter]
+            provider = "openrouter"
+            "#,
+        )
+        .unwrap();
+        let mut cfg = Config::new_from_toml_cfg(&raw).unwrap();
+        cfg.sync_byop_models_sources();
+        assert!(
+            cfg.endpoints.models_extra_sources.is_empty(),
+            "a provider with no base_url must not register a first-party fetch source"
+        );
+    }
+
     /// `AutoModeConfig` parses identically from a local `[auto_mode]` TOML table
     /// and an equivalent remote settings JSON object (serde is format-agnostic). The
     /// lean shape is all scalars/enums, so no custom tolerant deser is needed.

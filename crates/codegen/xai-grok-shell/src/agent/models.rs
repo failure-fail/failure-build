@@ -1527,9 +1527,22 @@ fn prefetch_models_blocking_gated(
             }
             Ok(FetchModelsResult { .. }) => {
                 tracing::warn!(base_url = %source.base_url, "BYOP models endpoint returned empty list");
+                xai_grok_telemetry::unified_log::warn(
+                    "byop: models endpoint returned an empty list",
+                    None,
+                    Some(serde_json::json!({ "base_url": source.base_url })),
+                );
             }
             Err(e) => {
                 tracing::warn!(base_url = %source.base_url, "Failed to fetch BYOP models: {:?}", e);
+                xai_grok_telemetry::unified_log::warn(
+                    "byop: models fetch failed",
+                    None,
+                    Some(serde_json::json!({
+                        "base_url": source.base_url,
+                        "error": format!("{e:?}"),
+                    })),
+                );
             }
         }
     }
