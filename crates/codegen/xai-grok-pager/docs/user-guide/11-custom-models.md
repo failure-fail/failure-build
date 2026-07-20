@@ -146,7 +146,7 @@ provider = "acme"
 model = "acme-large"
 ```
 
-A model referencing a `provider` inherits its `base_url`, `api_key`, `env_key`, `api_base_url`, `api_backend`, `auth_scheme`, `extra_headers`, and `context_window`; any field also set directly on the `[model.*]` entry wins. Four built-in presets are always available by name, so you don't need to define them yourself: `xai`, `openai` (`https://api.openai.com/v1`), `anthropic` (`https://api.anthropic.com/v1`, `x_api_key` auth), and `ollama` (`http://localhost:11434/v1`). A `[provider.openai]` block in your own config overrides the built-in preset.
+A model referencing a `provider` inherits its `base_url`, `api_key`, `env_key`, `api_base_url`, `api_backend`, `auth_scheme`, `extra_headers`, and `context_window`; any field also set directly on the `[model.*]` entry wins. Built-in presets are always available by name, so you don't need to define them yourself: `xai`, `openai` (`https://api.openai.com/v1`), `anthropic` (`https://api.anthropic.com/v1`, `x_api_key` auth), `openrouter`, `groq`, `together`, `deepseek`, `gemini` (OpenAI-compatible Gemini endpoint), and `ollama` (`http://localhost:11434/v1`). A `[provider.openai]` block in your own config overrides the built-in preset.
 
 ### CLI Flags
 

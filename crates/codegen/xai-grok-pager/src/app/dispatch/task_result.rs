@@ -429,7 +429,42 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
-        TaskResult::ProviderAdded { name, result } => {
+        TaskResult::ProviderAdded {
+            name,
+            result,
+            complete_auth,
+            auth_complete,
+        } => {
+            app.byop_setup_modal = None;
+            if complete_auth {
+                match (&result, auth_complete) {
+                    (Ok(()), Some(Ok(()))) => {
+                        app.auth_state = AuthState::Done;
+                        app.is_api_key_auth = true;
+                        app.welcome_prompt_focused = true;
+                    }
+                    (Ok(()), Some(Err(err))) => {
+                        app.auth_state = AuthState::Pending {
+                            error: Some(format!(
+                                "Saved provider '{name}', but auth failed: {err}. Press l to log in, or p to try again."
+                            )),
+                        };
+                    }
+                    (Ok(()), None) => {
+                        app.auth_state = AuthState::Pending {
+                            error: Some(format!(
+                                "Saved provider '{name}'. Press l to log in."
+                            )),
+                        };
+                    }
+                    (Err(err), _) => {
+                        app.auth_state = AuthState::Pending {
+                            error: Some(format!("Couldn't add provider '{name}': {err}")),
+                        };
+                    }
+                }
+                return vec![];
+            }
             if let Some(agent) = get_active_agent_mut(app) {
                 let message = match result {
                     Ok(()) => format!(

@@ -5,6 +5,7 @@ pub mod agents_modal;
 pub mod announcements;
 pub mod block_viewer;
 pub mod btw_overlay;
+pub mod byop_setup_modal;
 pub mod completion_dropdown;
 pub mod context_bar;
 pub mod credit_bar;

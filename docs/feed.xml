@@ -22,7 +22,17 @@
     <description>New features and bug fixes in Failure Build, the terminal coding agent forked from xAI's Grok Build.</description>
     <language>en-us</language>
     <atom:link href="https://raw.githubusercontent.com/failure-fail/failure-build/main/docs/feed.xml" rel="self" type="application/rss+xml" />
-    <lastBuildDate>Mon, 20 Jul 2026 07:05:00 GMT</lastBuildDate>
+    <lastBuildDate>Mon, 20 Jul 2026 07:55:00 GMT</lastBuildDate>
+
+    <item>
+      <title>New: provider presets + first-launch setup wizard</title>
+      <link>https://github.com/failure-fail/failure-build/commit/HEAD</link>
+      <guid isPermaLink="false">byop-setup-2026-07-20</guid>
+      <pubDate>Mon, 20 Jul 2026 07:55:00 GMT</pubDate>
+      <description><![CDATA[
+        Built-in BYOP presets now include OpenRouter, Groq, Together AI, DeepSeek, and Google Gemini (plus the existing xAI / OpenAI / Anthropic / Ollama ones), so <code>/provider add openrouter &lt;key&gt;</code> works without a base URL. First launch also shows a <strong>Set up a provider</strong> choice (<code>p</code>) — pick a preset, paste a key, and Failure saves it and authenticates. Same wizard via <code>/provider setup</code> anytime.
+      ]]></description>
+    </item>
 
     <item>
       <title>New: structured GitHub PR tools (view / list / create / comment)</title>

@@ -1,6 +1,9 @@
 //! `/provider add <name> <api-key> [base-url]` — configure a custom
 //! (BYOP) provider without hand-editing `config.toml`.
 //!
+//! Also: `/provider setup` opens the first-launch-style provider picker
+//! (welcome or in-session) so users don't have to remember preset names.
+//!
 //! Persists `[provider.<name>]`/`[model.<name>]` and stores the API key via
 //! the same provider-scoped secret storage `failure login --provider` uses.
 //! The existing config-file watcher picks up the change and refreshes the
@@ -8,11 +11,7 @@
 
 use crate::app::actions::Action;
 use crate::slash::command::{CommandExecCtx, CommandResult, SlashCommand};
-
-/// Built-in provider presets with a known default base URL (see
-/// `xai_grok_shell::agent::config::default_provider_entries`) — `base_url`
-/// is optional for these.
-const KNOWN_PRESETS: &[&str] = &["xai", "openai", "anthropic", "ollama"];
+use xai_grok_shell::agent::config::{builtin_provider_presets, is_builtin_provider_preset};
 
 pub struct ProviderCommand;
 
@@ -22,11 +21,11 @@ impl SlashCommand for ProviderCommand {
     }
 
     fn description(&self) -> &str {
-        "Configure a custom AI provider (OpenAI, Anthropic, Ollama, or any OpenAI-compatible endpoint)"
+        "Configure a custom AI provider (OpenAI, Anthropic, OpenRouter, Groq, …) or run /provider setup"
     }
 
     fn usage(&self) -> &str {
-        "/provider add <name> <api-key> [base-url]"
+        "/provider add <name> <api-key> [base-url]  |  /provider setup"
     }
 
     fn takes_args(&self) -> bool {
@@ -38,7 +37,7 @@ impl SlashCommand for ProviderCommand {
     }
 
     fn arg_placeholder(&self) -> Option<&str> {
-        Some("add <name> <api-key> [base-url]")
+        Some("add <name> <api-key> [base-url] | setup")
     }
 
     fn run(&self, _ctx: &mut CommandExecCtx, args: &str) -> CommandResult {
@@ -46,6 +45,9 @@ impl SlashCommand for ProviderCommand {
         let Some(sub) = tokens.next() else {
             return CommandResult::Error(format!("Usage: {}", self.usage()));
         };
+        if sub.eq_ignore_ascii_case("setup") {
+            return CommandResult::Action(Action::StartByopSetup);
+        }
         if !sub.eq_ignore_ascii_case("add") {
             return CommandResult::Error(format!(
                 "Unknown /provider subcommand '{sub}'. Usage: {}",
@@ -67,11 +69,15 @@ impl SlashCommand for ProviderCommand {
         };
         let base_url = tokens.next();
 
-        if base_url.is_none() && !KNOWN_PRESETS.contains(&name.to_ascii_lowercase().as_str()) {
+        if base_url.is_none() && !is_builtin_provider_preset(name) {
+            let known = builtin_provider_presets()
+                .iter()
+                .map(|p| p.id)
+                .collect::<Vec<_>>()
+                .join("/");
             return CommandResult::Error(format!(
-                "'{name}' isn't a built-in provider ({}), so a base URL is required. \
+                "'{name}' isn't a built-in provider ({known}), so a base URL is required. \
                  Usage: {}",
-                KNOWN_PRESETS.join("/"),
                 self.usage()
             ));
         }
@@ -80,6 +86,7 @@ impl SlashCommand for ProviderCommand {
             name: name.to_owned(),
             api_key: api_key.to_owned(),
             base_url: base_url.map(str::to_owned),
+            complete_auth: false,
         })
     }
 }
@@ -135,17 +142,42 @@ mod tests {
     }
 
     #[test]
+    fn setup_subcommand_opens_wizard() {
+        let mut ctx = dummy_ctx();
+        assert!(matches!(
+            ProviderCommand.run(&mut ctx, "setup"),
+            CommandResult::Action(Action::StartByopSetup)
+        ));
+    }
+
+    #[test]
     fn known_preset_without_base_url_is_ok() {
         let mut ctx = dummy_ctx();
         let result = ProviderCommand.run(&mut ctx, "add openai sk-test123");
         match result {
-            CommandResult::Action(Action::AddProvider { name, api_key, base_url }) => {
+            CommandResult::Action(Action::AddProvider {
+                name,
+                api_key,
+                base_url,
+                complete_auth,
+            }) => {
                 assert_eq!(name, "openai");
                 assert_eq!(api_key, "sk-test123");
                 assert_eq!(base_url, None);
+                assert!(!complete_auth);
             }
             other => panic!("expected AddProvider action, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn openrouter_preset_without_base_url_is_ok() {
+        let mut ctx = dummy_ctx();
+        let result = ProviderCommand.run(&mut ctx, "add openrouter sk-or-test");
+        assert!(matches!(
+            result,
+            CommandResult::Action(Action::AddProvider { name, .. }) if name == "openrouter"
+        ));
     }
 
     #[test]
@@ -163,7 +195,12 @@ mod tests {
             "add zandy-worker orch_test_abc https://ai-orchestrator-worker.example.dev/v1",
         );
         match result {
-            CommandResult::Action(Action::AddProvider { name, api_key, base_url }) => {
+            CommandResult::Action(Action::AddProvider {
+                name,
+                api_key,
+                base_url,
+                ..
+            }) => {
                 assert_eq!(name, "zandy-worker");
                 assert_eq!(api_key, "orch_test_abc");
                 assert_eq!(
