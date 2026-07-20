@@ -316,6 +316,23 @@ impl From<&xai_grok_tools::types::ToolInput> for AccessKind {
                 };
                 AccessKind::Bash(format!("{stage} && git commit -m '{}'", c.message))
             }
+            // gh_pr_* tools map to AccessKind::Bash with a reconstructed
+            // display command so they inherit the same auto-mode / prompt
+            // copy as shelling out to the same `gh` invocations.
+            ToolInput::GhPrView(v) => AccessKind::Bash(
+                xai_grok_tools::implementations::grok_build::gh_pr::permission_command_for_view(v),
+            ),
+            ToolInput::GhPrList(l) => AccessKind::Bash(
+                xai_grok_tools::implementations::grok_build::gh_pr::permission_command_for_list(l),
+            ),
+            ToolInput::GhPrCreate(c) => AccessKind::Bash(
+                xai_grok_tools::implementations::grok_build::gh_pr::permission_command_for_create(c),
+            ),
+            ToolInput::GhPrComment(c) => AccessKind::Bash(
+                xai_grok_tools::implementations::grok_build::gh_pr::permission_command_for_comment(
+                    c,
+                ),
+            ),
             ToolInput::Dynamic(_) => AccessKind::Read(None),
             #[allow(unreachable_patterns)]
             _ => AccessKind::Read(None),
@@ -752,6 +769,58 @@ mod tests {
             matches!(AccessKind::from(&commit), AccessKind::Bash(ref c) if c == "git add -A && git commit -m 'fix bug'"),
             "got {:?}",
             AccessKind::from(&commit)
+        );
+    }
+    #[test]
+    fn gh_pr_tools_map_to_bash_access_with_reconstructed_command() {
+        use xai_grok_tools::implementations::grok_build::gh_pr::{
+            GhPrCommentInput, GhPrCreateInput, GhPrListInput, GhPrViewInput,
+        };
+        use xai_grok_tools::types::ToolInput;
+
+        let view = ToolInput::GhPrView(GhPrViewInput {
+            pr: Some("42".into()),
+            repo: None,
+        });
+        assert!(
+            matches!(AccessKind::from(&view), AccessKind::Bash(ref c) if c.starts_with("gh pr view 42 --json ")),
+            "got {:?}",
+            AccessKind::from(&view)
+        );
+
+        let list = ToolInput::GhPrList(GhPrListInput {
+            limit: 10,
+            ..Default::default()
+        });
+        assert!(
+            matches!(AccessKind::from(&list), AccessKind::Bash(ref c) if c.starts_with("gh pr list --limit 10 --json ")),
+            "got {:?}",
+            AccessKind::from(&list)
+        );
+
+        let create = ToolInput::GhPrCreate(GhPrCreateInput {
+            title: "Add feature".into(),
+            body: Some("body".into()),
+            base: None,
+            head: None,
+            draft: false,
+            repo: None,
+        });
+        assert!(
+            matches!(AccessKind::from(&create), AccessKind::Bash(ref c) if c.starts_with("gh pr create --title ")),
+            "got {:?}",
+            AccessKind::from(&create)
+        );
+
+        let comment = ToolInput::GhPrComment(GhPrCommentInput {
+            pr: "7".into(),
+            body: "LGTM".into(),
+            repo: None,
+        });
+        assert!(
+            matches!(AccessKind::from(&comment), AccessKind::Bash(ref c) if c == "gh pr comment 7 --body LGTM"),
+            "got {:?}",
+            AccessKind::from(&comment)
         );
     }
     #[test]

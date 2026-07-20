@@ -691,6 +691,10 @@ impl ToolRegistryBuilder {
         b.register::<grok_build::GitDiffTool>();
         b.register::<grok_build::GitLogTool>();
         b.register::<grok_build::GitCommitTool>();
+        b.register::<grok_build::GhPrViewTool>();
+        b.register::<grok_build::GhPrListTool>();
+        b.register::<grok_build::GhPrCreateTool>();
+        b.register::<grok_build::GhPrCommentTool>();
         b.register::<grok_build::ImageToVideoTool>();
         b.register::<grok_build::ReferenceToVideoTool>();
         b.register::<grok_build::EnterPlanModeTool>();

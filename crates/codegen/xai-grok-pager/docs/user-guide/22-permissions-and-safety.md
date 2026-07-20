@@ -53,6 +53,10 @@ After splitting chained commands (on `&&`, `||`, `;`, and pipes), the following 
 - `git status`, `git branch`, `git log`, `git diff`, `git ls-files`, `git show`, `git rev-parse`
 - The structured `git_status`, `git_diff`, and `git_log` tools map to these same commands under the hood, so they're covered by this list (and by your own `Bash(git *)` rules) the same way. `git_commit` maps to `git add`/`git commit`, which are not on this list, so it prompts like running `git commit` directly would.
 
+**GitHub CLI (read-only):**
+- `gh pr view`, `gh pr list`, `gh pr status`, `gh pr checks`, `gh pr diff` (and the same view/list/status/checks/diff pattern for `issue`, `release`, `run`, `workflow`, `repo`, `gist`)
+- The structured `gh_pr_view` and `gh_pr_list` tools map to these same commands under the hood. `gh_pr_create` and `gh_pr_comment` map to mutating `gh pr` commands and prompt like running them directly would.
+
 **Search and inspection:**
 - `grep`, `rg` (not `rg --pre` / `rg --pre=…`, which spawn a preprocessor per file)
 

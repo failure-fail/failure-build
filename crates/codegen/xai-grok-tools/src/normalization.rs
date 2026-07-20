@@ -138,6 +138,10 @@ pub fn canonical_input(input: &ToolInput) -> Option<serde_json::Value> {
         | ToolInput::GitDiff(_)
         | ToolInput::GitLog(_)
         | ToolInput::GitCommit(_)
+        | ToolInput::GhPrView(_)
+        | ToolInput::GhPrList(_)
+        | ToolInput::GhPrCreate(_)
+        | ToolInput::GhPrComment(_)
         | ToolInput::Dynamic(_) => return None,
     })
 }

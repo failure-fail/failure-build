@@ -15,6 +15,11 @@ fn is_mcp_create_pull_request(tool_name: &str) -> bool {
         None => tool_name == "create_pull_request",
     }
 }
+/// Whether a tool name is the built-in typed `gh_pr_create` tool
+/// (bare id or `GrokBuild:gh_pr_create` fully-qualified form).
+fn is_gh_pr_create_tool(tool_name: &str) -> bool {
+    tool_name == "gh_pr_create" || tool_name.ends_with(":gh_pr_create")
+}
 /// Blocking wait tools that should abort when a mid-turn interjection is pending.
 fn is_interruptible_wait_tool(tool_name: &str, args: &serde_json::Value) -> bool {
     match tool_name {
@@ -1978,6 +1983,12 @@ impl SessionActor {
             {
                 let pr = git_detect::PrRef::find_in(&result.prompt_text).unwrap_or_default();
                 self.record_pr_created(pr, PrCreationSource::Mcp);
+            }
+            xai_grok_tools::types::output::ToolOutput::Text(t)
+                if is_gh_pr_create_tool(effective_tool_name) =>
+            {
+                let pr = git_detect::PrRef::find_in(&t.text).unwrap_or_default();
+                self.record_pr_created(pr, PrCreationSource::GhPrCreate);
             }
             _ => {}
         }
