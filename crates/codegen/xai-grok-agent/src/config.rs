@@ -290,6 +290,10 @@ fn default_grok_build_toolset() -> ToolServerConfig {
             (&grok_build::GitDiffTool).into(),
             (&grok_build::GitLogTool).into(),
             (&grok_build::GitCommitTool).into(),
+            (&grok_build::GhPrViewTool).into(),
+            (&grok_build::GhPrListTool).into(),
+            (&grok_build::GhPrCreateTool).into(),
+            (&grok_build::GhPrCommentTool).into(),
         ],
         behavior_preset: None,
     }

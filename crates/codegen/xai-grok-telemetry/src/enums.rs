@@ -34,6 +34,8 @@ pub enum PrCreationSource {
     Bash,
     /// An MCP `create_pull_request` tool.
     Mcp,
+    /// Built-in typed `gh_pr_create` tool.
+    GhPrCreate,
 }
 
 /// How the agent handles tool execution permissions.

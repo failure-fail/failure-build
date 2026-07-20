@@ -2459,6 +2459,7 @@ mod tests {
             "gh pr merge 42 --squash",
             "gh pr create --title x",
             "gh pr close 1",
+            "gh pr comment 42 --body hi",
             "gh repo delete example/repo",
             "gh api repos/example/repo --method DELETE",
             "gh release create v1",

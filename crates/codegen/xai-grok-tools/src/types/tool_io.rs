@@ -22,6 +22,9 @@ use crate::implementations::grok_build::browser::{
 };
 use crate::implementations::grok_build::enter_plan_mode::EnterPlanModeInput;
 use crate::implementations::grok_build::exit_plan_mode::ExitPlanModeInput;
+use crate::implementations::grok_build::gh_pr::{
+    GhPrCommentInput, GhPrCreateInput, GhPrListInput, GhPrViewInput,
+};
 use crate::implementations::grok_build::git::{
     GitCommitInput, GitDiffInput, GitLogInput, GitStatusInput,
 };
@@ -112,6 +115,10 @@ pub enum ToolInput {
     GitDiff(GitDiffInput),
     GitLog(GitLogInput),
     GitCommit(GitCommitInput),
+    GhPrView(GhPrViewInput),
+    GhPrList(GhPrListInput),
+    GhPrCreate(GhPrCreateInput),
+    GhPrComment(GhPrCommentInput),
     /// Dynamic input for runtime-registered tools (MCP, etc.)
     Dynamic(serde_json::Value),
 }
