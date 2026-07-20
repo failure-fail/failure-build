@@ -22,7 +22,17 @@
     <description>New features and bug fixes in Failure Build, the terminal coding agent forked from xAI's Grok Build.</description>
     <language>en-us</language>
     <atom:link href="https://raw.githubusercontent.com/failure-fail/failure-build/main/docs/feed.xml" rel="self" type="application/rss+xml" />
-    <lastBuildDate>Mon, 20 Jul 2026 07:55:00 GMT</lastBuildDate>
+    <lastBuildDate>Mon, 20 Jul 2026 10:00:00 GMT</lastBuildDate>
+
+    <item>
+      <title>New: /afk mode — agent decides what to do while you are away</title>
+      <link>https://github.com/failure-fail/failure-build/commit/PLACEHOLDER</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/PLACEHOLDER</guid>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 GMT</pubDate>
+      <description><![CDATA[
+        <code>/afk</code> turns on unattended coding: always-approve plus an autonomous goal so the agent keeps picking and shipping the next high-value change. Optional focus text steers the work (<code>/afk polish the README</code>). <code>/afk off</code> pauses and restores permission prompts; the status chip labels AFK goals distinctly.
+      ]]></description>
+    </item>
 
     <item>
       <title>New: provider presets + first-launch setup wizard</title>
