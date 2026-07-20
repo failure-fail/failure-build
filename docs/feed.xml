@@ -26,8 +26,8 @@
 
     <item>
       <title>New: structured GitHub PR tools (view / list / create / comment)</title>
-      <link>https://github.com/failure-fail/failure-build/commit/HEAD</link>
-      <guid isPermaLink="false">gh-pr-tools-2026-07-20</guid>
+      <link>https://github.com/failure-fail/failure-build/commit/132f135</link>
+      <guid isPermaLink="true">https://github.com/failure-fail/failure-build/commit/132f135</guid>
       <pubDate>Mon, 20 Jul 2026 07:05:00 GMT</pubDate>
       <description><![CDATA[
         The agent can now run <code>gh_pr_view</code>, <code>gh_pr_list</code>, <code>gh_pr_create</code>, and <code>gh_pr_comment</code> as typed tools instead of hand-quoting <code>gh</code> through the terminal tool. Read-only view/list stay auto-approved like the equivalent shell commands; create and comment still prompt, since they change shared GitHub state. Requires the GitHub CLI (<code>gh</code>) to be installed and authenticated.
