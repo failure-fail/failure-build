@@ -265,13 +265,14 @@ pub fn goal_status_line(
     }
 
     let is_active = matches!(goal.status, GoalDisplayStatus::Active);
+    let kind = if goal.is_afk() { "AFK" } else { "Goal" };
 
     let goal_text = if is_active {
         let frames = crate::glyphs::dot_spinner_frames();
         let frame = frames[(tick / 4) % frames.len()];
-        format!("{frame} Goal: {label}")
+        format!("{frame} {kind}: {label}")
     } else {
-        format!("Goal: {label}")
+        format!("{kind}: {label}")
     };
 
     Line::from(vec![
@@ -634,6 +635,29 @@ mod tests {
         );
         g.verifying_completion = true;
         assert_eq!(goal_phase_label(&g), "Paused");
+    }
+
+    #[test]
+    fn goal_line_afk_uses_afk_label() {
+        let mut g = make_goal(
+            GoalDisplayStatus::Active,
+            GoalDisplayPhase::Executing,
+            Some(0),
+            2,
+            0,
+        );
+        g.objective = "[AFK] Autonomously improve this project.".into();
+        let t = Theme::failurenight();
+        let line = goal_status_line(&g, &t, false, 0, None, 0);
+        let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            text.contains("AFK:"),
+            "AFK goals should label the chip AFK, got:\n{text}"
+        );
+        assert!(
+            !text.contains("Goal:"),
+            "AFK chip should not also say Goal:, got:\n{text}"
+        );
     }
 
     #[test]

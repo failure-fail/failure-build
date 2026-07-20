@@ -256,7 +256,68 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
             }
         },
     },
+    BuiltinCommand {
+        name: "afk",
+        description: "AFK mode: agent decides what to do (always-approve + autonomous goal)",
+        argument_hint: Some("[focus] | on [focus] | off | status"),
+        aliases: &[],
+        gate: BuiltinGate::Goal,
+        resolve: |args| parse_afk_args(args),
+    },
 ];
+
+/// Marker prefix on AFK goal objectives so the pager can label the chip
+/// and `/afk status` can recognize an AFK-owned goal.
+pub(crate) const AFK_OBJECTIVE_PREFIX: &str = "[AFK]";
+
+/// True when `objective` was created by `/afk` (leading `[AFK]` marker).
+pub(crate) fn is_afk_objective(objective: &str) -> bool {
+    objective.trim_start().starts_with(AFK_OBJECTIVE_PREFIX)
+}
+
+/// Build the autonomous objective for `/afk` / `/afk on [focus]`.
+pub(crate) fn build_afk_objective(focus: Option<&str>) -> String {
+    match focus.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(focus) => format!(
+            "{AFK_OBJECTIVE_PREFIX} Focus: {focus}. Autonomously decide the next \
+             highest-value steps toward this focus and execute them. Inspect the \
+             repo, implement concrete changes, verify with available tools, and \
+             keep going. Prefer shipping small completed work over long plans. \
+             Do not ask the user questions — decide and act. Mark the goal \
+             complete only when nothing useful remains for this focus."
+        ),
+        None => format!(
+            "{AFK_OBJECTIVE_PREFIX} Autonomously improve this project. Inspect \
+             the repository, pick the highest-value next change, implement it, \
+             verify it, and keep going. Prefer shipping small completed work \
+             over long plans. Do not ask the user questions — decide and act. \
+             Mark the goal complete only when nothing useful remains."
+        ),
+    }
+}
+
+fn parse_afk_args(args: &str) -> BuiltinAction {
+    let trimmed = args.trim();
+    let lower = trimmed.to_lowercase();
+    match lower.as_str() {
+        "off" | "stop" | "disable" => BuiltinAction::AfkOff,
+        "status" => BuiltinAction::AfkStatus,
+        "" | "on" => BuiltinAction::AfkOn { focus: None },
+        _ => {
+            let focus = if let Some(rest) = lower.strip_prefix("on ") {
+                // Map the lowercased remainder length back onto the
+                // original casing of `trimmed` (after the "on " prefix).
+                let prefix_len = trimmed.len() - rest.len();
+                trimmed[prefix_len..].trim()
+            } else {
+                trimmed
+            };
+            BuiltinAction::AfkOn {
+                focus: Some(focus.to_string()),
+            }
+        }
+    }
+}
 
 /// Split a trailing `--budget <tokens>` flag off a `/goal` objective.
 ///
@@ -659,6 +720,14 @@ pub(super) enum BuiltinAction {
     GoalPause,
     GoalResume,
     GoalClear,
+    /// Enable AFK mode: always-approve + start (or resume) an AFK goal.
+    AfkOn {
+        focus: Option<String>,
+    },
+    /// Disable AFK mode: pause the goal and turn off always-approve.
+    AfkOff,
+    /// Report AFK / goal / always-approve status.
+    AfkStatus,
 }
 
 impl BuiltinAction {
@@ -691,6 +760,9 @@ impl BuiltinAction {
             | BuiltinAction::GoalPause
             | BuiltinAction::GoalResume
             | BuiltinAction::GoalClear => "goal",
+            BuiltinAction::AfkOn { .. }
+            | BuiltinAction::AfkOff
+            | BuiltinAction::AfkStatus => "afk",
         }
     }
 
@@ -723,6 +795,8 @@ impl BuiltinAction {
             | BuiltinAction::GoalPause
             | BuiltinAction::GoalResume
             | BuiltinAction::GoalClear => false,
+            BuiltinAction::AfkOn { focus } => focus.is_some(),
+            BuiltinAction::AfkOff | BuiltinAction::AfkStatus => false,
         }
     }
 }
@@ -1524,6 +1598,7 @@ mod tests {
                 "session-info",
                 "feedback",
                 "goal",
+                "afk",
                 "loop",
                 "commit",
                 "deploy",
@@ -1605,6 +1680,7 @@ mod tests {
             ..CommandAvailability::all_enabled()
         });
         assert!(!names.iter().any(|n| n == "goal"), "got: {names:?}");
+        assert!(!names.iter().any(|n| n == "afk"), "got: {names:?}");
     }
 
     #[test]
@@ -1721,6 +1797,7 @@ mod tests {
             "memory",
             "feedback",
             "goal",
+            "afk",
             "hooks-list",
             "plugins",
             "reload-plugins",
@@ -1756,6 +1833,10 @@ mod tests {
         assert!(
             names.iter().any(|n| n == "goal"),
             "goal should be advertised pre-session when the flag is on, got: {names:?}",
+        );
+        assert!(
+            names.iter().any(|n| n == "afk"),
+            "afk should be advertised pre-session when the goal flag is on, got: {names:?}",
         );
         // Runtime/tool-dependent gates stay closed pre-session.
         for forbidden in ["flush", "dream", "memory", "feedback", "plugins"] {
@@ -2166,6 +2247,7 @@ mod tests {
             "dream",
             "feedback",
             "goal",
+            "afk",
             "loop",
             "hooks-list",
             "hooks-trust",
@@ -2445,6 +2527,68 @@ mod tests {
     #[test]
     fn goal_clear_resolves_to_clear() {
         assert!(matches!(resolve_goal("clear"), BuiltinAction::GoalClear));
+    }
+
+    fn resolve_afk(args: &str) -> BuiltinAction {
+        resolve_builtin("afk", args).expect("afk builtin")
+    }
+
+    #[test]
+    fn afk_empty_and_on_start_default() {
+        assert!(matches!(
+            resolve_afk(""),
+            BuiltinAction::AfkOn { focus: None }
+        ));
+        assert!(matches!(
+            resolve_afk("on"),
+            BuiltinAction::AfkOn { focus: None }
+        ));
+    }
+
+    #[test]
+    fn afk_off_and_status() {
+        assert!(matches!(resolve_afk("off"), BuiltinAction::AfkOff));
+        assert!(matches!(resolve_afk("stop"), BuiltinAction::AfkOff));
+        assert!(matches!(resolve_afk("disable"), BuiltinAction::AfkOff));
+        assert!(matches!(resolve_afk("status"), BuiltinAction::AfkStatus));
+    }
+
+    #[test]
+    fn afk_focus_and_on_focus() {
+        match resolve_afk("fix the auth tests") {
+            BuiltinAction::AfkOn {
+                focus: Some(focus),
+            } => assert_eq!(focus, "fix the auth tests"),
+            other => panic!("expected AfkOn with focus, got {}", other.command_name()),
+        }
+        match resolve_afk("on polish the README") {
+            BuiltinAction::AfkOn {
+                focus: Some(focus),
+            } => assert_eq!(focus, "polish the README"),
+            other => panic!("expected AfkOn with focus, got {}", other.command_name()),
+        }
+    }
+
+    #[test]
+    fn afk_objective_builder_marks_prefix() {
+        let def = build_afk_objective(None);
+        assert!(is_afk_objective(&def));
+        assert!(def.starts_with(AFK_OBJECTIVE_PREFIX));
+        let focused = build_afk_objective(Some("ship the undo key"));
+        assert!(is_afk_objective(&focused));
+        assert!(focused.contains("ship the undo key"));
+    }
+
+    #[test]
+    fn afk_command_name_and_args_provided() {
+        assert_eq!(BuiltinAction::AfkOff.command_name(), "afk");
+        assert_eq!(BuiltinAction::AfkStatus.command_name(), "afk");
+        assert!(!BuiltinAction::AfkOn { focus: None }.args_provided());
+        assert!(BuiltinAction::AfkOn {
+            focus: Some("x".into())
+        }
+        .args_provided());
+        assert!(!BuiltinAction::AfkOff.args_provided());
     }
 
     #[test]

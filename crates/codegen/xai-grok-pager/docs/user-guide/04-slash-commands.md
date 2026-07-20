@@ -391,6 +391,23 @@ Set, manage, or check an autonomous goal. Failure works toward the objective acr
 
 Arguments: `<objective>`, `status`, `pause`, `resume`, or `clear`. **Availability:** appears only when the goal feature is enabled and the `update_goal` tool is in the session toolset.
 
+### `/afk`
+
+Turn on AFK mode: Failure enables always-approve and starts an autonomous goal so the agent keeps deciding what to do while you are away. Optional focus text steers the work; without it, the agent picks high-value improvements in the repo on its own.
+
+```
+/afk
+/afk polish the onboarding docs
+/afk off
+/afk status
+```
+
+- `/afk` / `/afk on [focus]` — enable always-approve and start (or resume a paused AFK goal)
+- `/afk off` — pause the goal and turn always-approve back off
+- `/afk status` — show AFK / always-approve / goal state
+
+Stop anytime with `/afk off` or Ctrl+C (pauses the goal; use `/afk off` if you also want permission prompts back). **Availability:** same gate as `/goal`.
+
 ### `/theme`
 
 Switch the TUI color theme.

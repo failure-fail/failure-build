@@ -331,6 +331,77 @@ impl SessionActor {
                             }
                         }
                     }
+                    BuiltinAction::AfkOn { focus } => {
+                        xai_grok_telemetry::session_ctx::log_event(slash_used);
+                        // AFK always wants always-approve so the agent can
+                        // keep working unattended without permission spam.
+                        self.apply_yolo_from_slash(true).await;
+
+                        use crate::session::goal_tracker::GoalStatus;
+                        use crate::session::slash_commands::{
+                            build_afk_objective, is_afk_objective,
+                        };
+
+                        let existing = {
+                            let tracker = self.goal_tracker.lock();
+                            tracker.snapshot().map(|o| (o.objective.clone(), o.status))
+                        };
+
+                        // Bare `/afk` with a paused AFK goal resumes it
+                        // instead of replacing the objective.
+                        if focus.is_none()
+                            && let Some((obj, status)) = existing.as_ref()
+                            && is_afk_objective(obj)
+                        {
+                            match status {
+                                GoalStatus::Active => {
+                                    self.send_slash_command_output(
+                                        "AFK is already on. Use /afk off to stop.",
+                                    )
+                                    .await;
+                                    return ok_end_turn(0, None);
+                                }
+                                GoalStatus::UserPaused
+                                | GoalStatus::BackOffPaused
+                                | GoalStatus::NoProgressPaused
+                                | GoalStatus::InfraPaused
+                                | GoalStatus::Blocked => {
+                                    match self.resume_goal().await {
+                                        GoalResumeOutcome::Inference { reminder, user_msg } => {
+                                            self.send_slash_command_output(&format!(
+                                                "AFK resumed (always-approve on). {user_msg}"
+                                            ))
+                                            .await;
+                                            vec![text_block(reminder)]
+                                        }
+                                        GoalResumeOutcome::Message(msg) => {
+                                            self.send_slash_command_output(&msg).await;
+                                            return ok_end_turn(0, None);
+                                        }
+                                    }
+                                }
+                                GoalStatus::Complete | GoalStatus::BudgetLimited => {
+                                    let objective = build_afk_objective(None);
+                                    let reminder = self.setup_goal(&objective, None).await;
+                                    self.send_slash_command_output(
+                                        "AFK on — always-approve enabled; deciding what to do next.",
+                                    )
+                                    .await;
+                                    vec![text_block(reminder), text_block(objective)]
+                                }
+                            }
+                        } else {
+                            let objective = build_afk_objective(focus.as_deref());
+                            let reminder = self.setup_goal(&objective, None).await;
+                            let msg = if focus.as_ref().is_some_and(|f| !f.trim().is_empty()) {
+                                "AFK on — always-approve enabled; working your focus."
+                            } else {
+                                "AFK on — always-approve enabled; deciding what to do next."
+                            };
+                            self.send_slash_command_output(msg).await;
+                            vec![text_block(reminder), text_block(objective)]
+                        }
+                    }
                     _ => return self.execute_builtin_slash_command(action).await,
                 }
             }

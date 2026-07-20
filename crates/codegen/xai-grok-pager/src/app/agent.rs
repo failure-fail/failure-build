@@ -473,6 +473,14 @@ pub struct GoalDisplayState {
     pub elapsed_floor_ms: u64,
 }
 impl GoalDisplayState {
+    /// True when this goal was started via `/afk` (objective carries the
+    /// `[AFK]` marker written by the shell).
+    pub fn is_afk(&self) -> bool {
+        self.objective
+            .trim_start()
+            .starts_with("[AFK]")
+    }
+
     /// Minimal state for tests that only need a present goal (e.g. occluder
     /// gating); field values are representative, not load-bearing.
     #[cfg(test)]

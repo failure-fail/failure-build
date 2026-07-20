@@ -16,38 +16,7 @@ impl SessionActor {
                 ok_end_turn(0, None)
             }
             BuiltinAction::SetYolo { enabled } => {
-                let was = self.permissions.is_yolo_mode();
-                self.permissions.set_yolo_mode(enabled);
-                // Report the ACTUAL state, not the request: the manager clamps a
-                // requested ON to OFF under the always-approve pin, so `enabled`
-                // would mis-report a turn-on (event, telemetry, and the log line)
-                // that never happened.
-                let actual = self.permissions.is_yolo_mode();
-                if let Some(actual) = yolo_toggle_report(was, actual) {
-                    self.emit_event(crate::session::events::Event::YoloToggled { enabled: actual });
-                    xai_grok_telemetry::session_ctx::log_event(
-                        xai_grok_telemetry::events::YoloToggled {
-                            enabled: actual,
-                            previous_state: was,
-                            trigger: xai_grok_telemetry::events::YoloTrigger::SlashCommand,
-                        },
-                    );
-                    tracing::info_span!(
-                        "session.permission_mode_changed",
-                        from_mode = crate::session::telemetry::permission_mode_label(was),
-                        to_mode = crate::session::telemetry::permission_mode_label(actual),
-                        trigger = "slash_command",
-                        enabled = actual,
-                    )
-                    .in_scope(|| {});
-                }
-                let status = if actual { "enabled" } else { "disabled" };
-                tracing::info!(
-                    session_id = %self.session_info.id.0,
-                    requested = enabled,
-                    enabled = actual,
-                    "YOLO mode {status} via /yolo slash command",
-                );
+                self.apply_yolo_from_slash(enabled).await;
                 ok_end_turn(0, None)
             }
             BuiltinAction::FlushMemory => {
@@ -896,6 +865,120 @@ impl SessionActor {
                 self.send_slash_command_output("Goal cleared.").await;
                 ok_end_turn(0, None)
             }
+            // AfkOn is intercepted in handle_prompt (like GoalSet) so the
+            // turn flows through to model inference.
+            BuiltinAction::AfkOn { .. } => {
+                unreachable!("AfkOn is intercepted in handle_prompt")
+            }
+            BuiltinAction::AfkOff => {
+                use crate::session::goal_tracker::{GoalPauseReason, GoalStatus};
+                use crate::session::slash_commands::is_afk_objective;
+
+                let current_tokens = self.chat_state_handle.get_total_tokens().await as i64;
+                let (goal_msg, changed) = {
+                    let mut tracker = self.goal_tracker.lock();
+                    let is_afk = tracker
+                        .snapshot()
+                        .is_some_and(|o| is_afk_objective(&o.objective));
+                    match tracker.status() {
+                        Some(GoalStatus::Active) => {
+                            debug_assert!(
+                                tracker.pause(GoalPauseReason::User),
+                                "Active goal must pause"
+                            );
+                            (
+                                if is_afk {
+                                    "AFK paused."
+                                } else {
+                                    "Goal paused (AFK off)."
+                                },
+                                true,
+                            )
+                        }
+                        Some(
+                            GoalStatus::UserPaused
+                            | GoalStatus::BackOffPaused
+                            | GoalStatus::NoProgressPaused
+                            | GoalStatus::InfraPaused
+                            | GoalStatus::Blocked,
+                        ) => (
+                            if is_afk {
+                                "AFK was already paused."
+                            } else {
+                                "Goal already paused; always-approve disabled."
+                            },
+                            false,
+                        ),
+                        Some(GoalStatus::Complete | GoalStatus::BudgetLimited) | None => {
+                            ("No active goal to pause.", false)
+                        }
+                    }
+                };
+                if changed {
+                    self.clear_pending_classifier_completions();
+                    let (tokens_used, finished_marginal) = self.goal_tokens(current_tokens);
+                    let notify = self.goal_notify_sender();
+                    notify.emit_goal_updated(
+                        &mut self.goal_tracker.lock(),
+                        tokens_used,
+                        finished_marginal,
+                    );
+                }
+                self.apply_yolo_from_slash(false).await;
+                self.send_slash_command_output(&format!(
+                    "{goal_msg} Always-approve disabled. Use /afk to resume."
+                ))
+                .await;
+                ok_end_turn(0, None)
+            }
+            BuiltinAction::AfkStatus => {
+                use crate::session::slash_commands::is_afk_objective;
+
+                let yolo = self.permissions.is_yolo_mode();
+                let current_tokens = self.chat_state_handle.get_total_tokens().await as i64;
+                let goal_tokens = self.goal_tokens_used(current_tokens);
+                let msg = {
+                    let mut tracker = self.goal_tracker.lock();
+                    tracker.account_elapsed();
+                    match tracker.snapshot() {
+                        Some(o) => {
+                            let afk = is_afk_objective(&o.objective);
+                            let status = format!("{:?}", o.status);
+                            let phase = format!("{:?}", o.phase);
+                            let elapsed =
+                                crate::session::goal_orchestrator::format_elapsed(o.elapsed_ms);
+                            let mode = if afk
+                                && matches!(
+                                    o.status,
+                                    crate::session::goal_tracker::GoalStatus::Active
+                                )
+                                && yolo
+                            {
+                                "AFK: on"
+                            } else if afk {
+                                "AFK: paused/partial (goal present; check always-approve)"
+                            } else {
+                                "AFK: off (a non-AFK goal is active — use /goal)"
+                            };
+                            format!(
+                                "{mode}\n\
+                                 Always-approve: {}\n\
+                                 Goal: {}\n\
+                                 Status: {status} | Phase: {phase}\n\
+                                 Tokens used: {goal_tokens} | Elapsed: {elapsed}",
+                                if yolo { "on" } else { "off" },
+                                o.objective,
+                            )
+                        }
+                        None => format!(
+                            "AFK: off\nAlways-approve: {}\nNo goal set. Use /afk to start.",
+                            if yolo { "on" } else { "off" },
+                        ),
+                    }
+                };
+                self.send_slash_command_output(&msg).await;
+                ok_end_turn(0, None)
+            }
         }
     }
 
@@ -952,5 +1035,38 @@ impl SessionActor {
         }
 
         ok_end_turn(0, None)
+    }
+
+    /// Apply always-approve (YOLO) from a slash path (`/always-approve`, `/afk`).
+    ///
+    /// Reports the *actual* resulting state: the permission manager can clamp
+    /// a requested ON to OFF under the always-approve pin.
+    pub(super) async fn apply_yolo_from_slash(self: &Arc<Self>, enabled: bool) {
+        let was = self.permissions.is_yolo_mode();
+        self.permissions.set_yolo_mode(enabled);
+        let actual = self.permissions.is_yolo_mode();
+        if let Some(actual) = yolo_toggle_report(was, actual) {
+            self.emit_event(crate::session::events::Event::YoloToggled { enabled: actual });
+            xai_grok_telemetry::session_ctx::log_event(xai_grok_telemetry::events::YoloToggled {
+                enabled: actual,
+                previous_state: was,
+                trigger: xai_grok_telemetry::events::YoloTrigger::SlashCommand,
+            });
+            tracing::info_span!(
+                "session.permission_mode_changed",
+                from_mode = crate::session::telemetry::permission_mode_label(was),
+                to_mode = crate::session::telemetry::permission_mode_label(actual),
+                trigger = "slash_command",
+                enabled = actual,
+            )
+            .in_scope(|| {});
+        }
+        let status = if actual { "enabled" } else { "disabled" };
+        tracing::info!(
+            session_id = %self.session_info.id.0,
+            requested = enabled,
+            enabled = actual,
+            "YOLO mode {status} via slash command",
+        );
     }
 }

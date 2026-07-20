@@ -610,10 +610,17 @@ pub fn render_goal_detail(
 
     // ── Pause hint (only for any paused variant) ──
     if goal.status.is_paused() {
-        let hint = format!(
-            "Status: {} \u{2014} type /goal resume to continue",
-            goal.status.pause_label()
-        );
+        let hint = if goal.is_afk() {
+            format!(
+                "Status: {} \u{2014} type /afk to resume (or /afk off to stop)",
+                goal.status.pause_label()
+            )
+        } else {
+            format!(
+                "Status: {} \u{2014} type /goal resume to continue",
+                goal.status.pause_label()
+            )
+        };
         buf.set_line_safe(
             x,
             y,
@@ -1015,13 +1022,15 @@ pub fn render_goal_detail(
     // ── Commands hint ──
     if y < inner.y + inner.height {
         let hint_style = Style::default().fg(theme.gray_dim);
+        let commands = if goal.is_afk() {
+            "Esc: close  /afk | /afk off | /afk status"
+        } else {
+            "Esc: close  /goal resume | pause | status | clear"
+        };
         buf.set_line_safe(
             x,
             y,
-            &Line::from(Span::styled(
-                "Esc: close  /goal resume | pause | status | clear",
-                hint_style,
-            )),
+            &Line::from(Span::styled(commands, hint_style)),
             w,
         );
     }
